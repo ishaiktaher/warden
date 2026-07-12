@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/index.py": {
+      "includeFiles": "ui/index.html",
+      "excludeFiles": "{.venv/**,tests/**,proxy/tests/**,enforcer/tests/**,demo/**,skills/**,vault/**,mock_site/**,audit/*.jsonl,**/__pycache__/**,**/*.pyc}"
+    }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ]
+}

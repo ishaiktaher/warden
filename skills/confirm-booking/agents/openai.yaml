@@ -1,0 +1,4 @@
+interface:
+  display_name: "Confirm Booking"
+  short_description: "Scope-enforced autonomous booking payments"
+  default_prompt: "Use $confirm-booking to confirm a booking within my authorized spending limit."

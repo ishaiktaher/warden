@@ -1,0 +1,14 @@
+.env
+.venv
+.git
+.DS_Store
+**/__pycache__
+**/*.pyc
+audit/*.jsonl
+tests
+proxy/tests
+enforcer/tests
+demo
+skills
+vault
+mock_site

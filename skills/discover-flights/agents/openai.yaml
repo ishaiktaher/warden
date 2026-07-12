@@ -1,0 +1,4 @@
+interface:
+  display_name: "Discover Flights"
+  short_description: "Find live flight evidence with Linkup"
+  default_prompt: "Use $discover-flights to find current flight options."

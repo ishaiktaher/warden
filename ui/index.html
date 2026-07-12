@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Warden — Agent Command Center</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f4f6f8;
+      --muted: #94a3b8;
+      --panel: #111827;
+      --line: #273449;
+      --cyan: #56d6c9;
+      --red: #ff7c83;
+      --amber: #f6c85f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 15% 0, #16324a 0, transparent 34%), #071019;
+      color: var(--ink);
+      font: 15px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+
+    main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 38px 0 60px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    .eyebrow {
+      color: var(--cyan);
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    h1 {
+      margin: 6px 0 4px;
+      font-size: clamp(32px, 5vw, 58px);
+      line-height: 1;
+      letter-spacing: -.045em;
+    }
+
+    .subtitle,
+    .hint {
+      color: var(--muted);
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+    }
+
+    .hosted-note {
+      display: none;
+      margin-bottom: 20px;
+      padding: 12px 14px;
+      border: 1px solid var(--amber);
+      border-radius: 12px;
+      background: #2a210a;
+      color: #ffe3a0;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 16px var(--cyan);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(340px, .85fr);
+      gap: 20px;
+    }
+
+    .card {
+      background: color-mix(in srgb, var(--panel) 92%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: 0 18px 50px #0005;
+    }
+
+    h2 {
+      margin: 0 0 5px;
+      font-size: 18px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 140px;
+      resize: vertical;
+      margin: 18px 0 10px;
+      border: 1px solid #33445c;
+      border-radius: 14px;
+      padding: 16px;
+      color: var(--ink);
+      background: #08121d;
+      font: inherit;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 3px #56d6c922;
+    }
+
+    .flow {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #0b1b28;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .kbd {
+      border: 1px solid #46566a;
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      padding: 1px 6px;
+      color: var(--ink);
+    }
+
+    .facts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .fact {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: var(--muted);
+    }
+
+    .fact b {
+      display: block;
+      color: var(--ink);
+      font-size: 18px;
+    }
+
+    a.fact {
+      text-decoration: none;
+      transition: border-color .15s, transform .15s;
+    }
+
+    a.fact:hover {
+      border-color: var(--cyan);
+      transform: translateY(-1px);
+    }
+
+    a.fact:after {
+      content: "Open page ↗";
+      display: block;
+      margin-top: 5px;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .modes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .mode {
+      position: relative;
+      cursor: pointer;
+    }
+
+    .mode input {
+      position: absolute;
+      opacity: 0;
+    }
+
+    .mode span {
+      display: block;
+      min-height: 84px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #091522;
+      color: var(--muted);
+    }
+
+    .mode b {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+
+    .mode input:checked+span {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 2px #56d6c922;
+    }
+
+    .mode.unsafe input:checked+span {
+      border-color: var(--red);
+      box-shadow: 0 0 0 2px #ff7c8322;
+    }
+
+    button {
+      border: 0;
+      border-radius: 11px;
+      padding: 12px 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .primary {
+      width: 100%;
+      background: var(--cyan);
+      color: #03201d;
+    }
+
+    .secondary {
+      background: #1c2a3b;
+      color: var(--ink);
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: wait;
+    }
+
+    .auto-state {
+      margin-top: 14px;
+      padding: 11px 13px;
+      border: 1px dashed #3a4c63;
+      border-radius: 11px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .auto-state.active {
+      color: var(--cyan);
+      border-color: var(--cyan);
+    }
+
+    .result {
+      display: none;
+      margin-top: 14px;
+      border-radius: 12px;
+      padding: 13px;
+      background: #0b1b28;
+    }
+
+    .result.blocked {
+      display: block;
+      border-left: 3px solid var(--red);
+    }
+
+    .result.success {
+      display: block;
+      border-left: 3px solid var(--cyan);
+    }
+
+    .result.ignored {
+      display: block;
+      border-left: 3px solid var(--amber);
+    }
+
+    .agents {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .agent {
+      padding: 10px;
+      border-radius: 10px;
+      background: #0a1520;
+      border: 1px solid var(--line);
+      font-size: 12px;
+    }
+
+    .agent b {
+      display: block;
+      color: var(--cyan);
+    }
+
+    .audit-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .timeline {
+      margin-top: 16px;
+      max-height: 510px;
+      overflow: auto;
+    }
+
+    .capability-panel {
+      margin-top: 16px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #091522;
+    }
+
+    .capability-chain {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-top: 9px;
+    }
+
+    .cap-step {
+      position: relative;
+      padding: 8px 5px;
+      border: 1px solid #33445c;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 10px;
+      text-align: center;
+    }
+
+    .cap-step.done { color: #03201d; border-color: var(--cyan); background: var(--cyan); }
+    .cap-step.rejected { color: #280508; border-color: var(--red); background: var(--red); }
+    .cap-grant { margin-top: 8px; color: var(--muted); font: 10px ui-monospace, monospace; }
+
+    .event {
+      position: relative;
+      margin-left: 8px;
+      padding: 0 0 18px 20px;
+      border-left: 1px solid #34445a;
+    }
+
+    .event:before {
+      content: "";
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--cyan);
+      left: -5px;
+      top: 5px;
+    }
+
+    .event small {
+      color: var(--muted);
+    }
+
+    .event code {
+      color: var(--amber);
+    }
+
+    .tools {
+      margin-top: 20px;
+    }
+
+    .tool-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .tool {
+      min-height: 108px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #091522;
+    }
+
+    .tool .kind {
+      color: var(--cyan);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .tool b {
+      display: block;
+      margin: 5px 0 3px;
+      font-size: 16px;
+    }
+
+    .tool p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width:850px) {
+      .grid {
+        grid-template-columns: 1fr
+      }
+
+      .agents,
+      .tool-grid {
+        grid-template-columns: 1fr 1fr
+      }
+
+      header {
+        align-items: start;
+        flex-direction: column
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <header>
+      <div>
+        <div class="eyebrow">AI as agency · enforced outside the model</div>
+        <h1>Warden</h1>
+        <div class="subtitle">Autonomous travel, bounded authority.</div>
+      </div>
+      <div class="status"><span class="dot"></span> Hard enforcement active</div>
+    </header>
+    <div class="hosted-note" id="hosted-note"><b>Hosted showcase:</b> agent and payment-provider boundaries are simulated. No Hermes, Supabase, vault, or Dodo credentials are deployed publicly. Run locally for the real integration.</div>
+    <div class="grid">
+      <section class="card">
+        <h2>Ask Warden to book</h2>
+        <div class="hint">Focus the box, activate Wispr Flow, and speak naturally.</div>
+        <textarea id="command" autofocus
+          placeholder="Book this flight. I authorize a maximum spend of ₹5,000."></textarea>
+        <div class="flow"><span class="kbd">Fn</span><span>Activate Wispr Flow and dictate. Warden infers explicit
+            authorization from your words.</span></div>
+        <div class="facts">
+          <a class="fact" href="http://127.0.0.1:8080" target="_blank" rel="noopener">Flight source<b>Malicious demo
+              page</b>HYD → BLR</a>
+          <div class="fact">Page price<b>₹6,000</b>Read-only booking evidence</div>
+        </div>
+        <div class="modes" role="radiogroup" aria-label="Enforcement comparison">
+          <label class="mode"><input type="radio" name="gate" value="warden" checked><span><b>Warden gate</b>Scope
+              checked before secrets or Dodo payment.</span></label>
+          <label class="mode unsafe"><input type="radio" name="gate" value="without_warden"><span><b>Without
+                Warden</b>Test-only deliberate bypass and charge.</span></label>
+        </div>
+        <div class="auto-state" id="auto-state">Waiting for Wispr Flow dictation…</div>
+        <div id="result" class="result"></div>
+        <div class="agents">
+          <div class="agent"><b>01 Orchestrator</b>Trusted user intent</div>
+          <div class="agent"><b>02 Discovery</b>Linkup evidence</div>
+          <div class="agent"><b>03 Booking</b>Warden request</div>
+          <div class="agent"><b>04 Voice</b>ElevenLabs result</div>
+        </div>
+      </section>
+      <aside class="card">
+        <div class="audit-head">
+          <div>
+            <h2>Agent audit trail</h2>
+            <div class="hint">Sanitized, append-only events</div>
+          </div><button class="secondary" id="refresh">Refresh</button>
+        </div>
+        <div class="capability-panel">
+          <div class="eyebrow">Signed capability</div>
+          <div id="capability-chain" class="capability-chain">
+            <div class="cap-step">Issued</div><div class="cap-step">Delegated</div>
+            <div class="cap-step">Verified</div><div class="cap-step">Consumed</div>
+          </div>
+          <div id="capability-grant" class="cap-grant">No capability task yet</div>
+        </div>
+        <div id="timeline" class="timeline">
+          <div class="hint">Loading audit events…</div>
+        </div>
+      </aside>
+    </div>
+    <section class="card tools">
+      <div class="eyebrow">Integrated stack</div>
+      <h2>Tools used</h2>
+      <div class="hint">Each tool has a bounded role; only the proxy can reach payment credentials.</div>
+      <div class="tool-grid">
+        <div class="tool"><span class="kind">Orchestration</span><b>Hermes Agent</b>
+          <p>Runs the orchestrator and isolated specialist agents.</p>
+        </div>
+        <div class="tool"><span class="kind">Voice input</span><b>Wispr Flow</b>
+          <p>Dictates trusted user intent into the command box.</p>
+        </div>
+        <div class="tool"><span class="kind">Discovery</span><b>Linkup</b>
+          <p>Finds live travel evidence, always labeled untrusted.</p>
+        </div>
+        <div class="tool"><span class="kind">Policy</span><b>Warden</b>
+          <p>Pure scope enforcement outside the model.</p>
+        </div>
+        <div class="tool"><span class="kind">Secrets</span><b>Supabase + Fernet</b>
+          <p>Stores the encrypted subscription reference.</p>
+        </div>
+        <div class="tool"><span class="kind">Payments</span><b>Dodo Payments</b>
+          <p>Creates test-mode on-demand subscription charges.</p>
+        </div>
+        <div class="tool"><span class="kind">Voice output</span><b>ElevenLabs</b>
+          <p>Speaks only sanitized booking outcomes.</p>
+        </div>
+        <div class="tool"><span class="kind">Application</span><b>FastAPI + Python</b>
+          <p>Hosts the proxy, UI, and audit API.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script>
+    const command = document.querySelector('#command');
+    const result = document.querySelector('#result');
+    const autoState = document.querySelector('#auto-state');
+    const hostedShowcase = !['127.0.0.1', 'localhost'].includes(window.location.hostname);
+    let executionTimer;
+    let lastExecutionKey = '';
+
+    if (hostedShowcase) {
+      document.querySelector('#hosted-note').style.display = 'block';
+      document.querySelector('.status').lastChild.textContent = ' Hosted showcase active';
+    }
+
+    function scheduleExecution() {
+      clearTimeout(executionTimer);
+      const text = command.value.trim();
+      if (!text) { autoState.className = 'auto-state'; autoState.textContent = 'Waiting for Wispr Flow dictation…'; return; }
+      autoState.className = 'auto-state active';
+      autoState.textContent = 'Listening… execution starts after 2 seconds of silence.';
+      executionTimer = setTimeout(executeInstruction, 2000);
+    }
+
+    async function executeInstruction() {
+      if (!command.value.trim()) { result.className = 'result blocked'; result.textContent = 'Dictate a booking instruction with an explicit maximum spend.'; return; }
+      const gate = document.querySelector('input[name="gate"]:checked').value;
+      const executionKey = `${gate}:${command.value.trim()}`;
+      if (executionKey === lastExecutionKey) return;
+      lastExecutionKey = executionKey;
+      let confirmed = false;
+      if (gate === 'without_warden') {
+        confirmed = window.confirm('DEMO ONLY: This bypasses Warden and will create a real Dodo TEST-MODE charge of ₹6,000. Continue?');
+        if (!confirmed) { autoState.className = 'auto-state'; autoState.textContent = 'Unsafe test charge cancelled.'; return; }
+      }
+      autoState.className = 'auto-state active'; autoState.textContent = 'Hermes is classifying intent…'; result.className = 'result';
+      if (hostedShowcase) {
+        runHostedShowcase(gate, command.value.trim());
+        return;
+      }
+      try {
+        const response = await fetch('/demo/bookings/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instruction: command.value, gate, confirm_unsafe_test_charge: confirmed }) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'The request failed safely.');
+        result.className = `result ${data.status}`;
+        if (data.status === 'ignored') result.textContent = data.message;
+        else if (data.status === 'blocked') result.textContent = `${data.reason} No charge was made. Price ₹${data.amount}; inferred authorization ₹${data.max_spend}.`;
+        else result.textContent = `Dodo test booking charged ₹${data.amount} with ${data.gate === 'warden' ? 'Warden enforcement' : 'the Warden gate bypassed'}.`;
+        renderAudit(data.audit_events || []);
+      } catch (error) { result.className = 'result blocked'; result.textContent = error.message; }
+      finally { autoState.className = 'auto-state'; autoState.textContent = 'Finished. Change the instruction or mode to run again.'; }
+    }
+
+    command.addEventListener('input', () => { lastExecutionKey = ''; scheduleExecution(); });
+    document.querySelectorAll('input[name="gate"]').forEach(input => input.addEventListener('change', () => { lastExecutionKey = ''; scheduleExecution(); }));
+
+    function runHostedShowcase(gate, text) {
+      const flightIntent = /\b(flight|fly|airline|book|booking)\b/i.test(text);
+      const amountMatch = text.replaceAll(',', '').match(/(?:₹|inr\s*)?(\d+(?:\.\d+)?)/i);
+      const maxSpend = amountMatch ? Number(amountMatch[1]) : null;
+      const now = new Date().toISOString();
+      const grant = crypto.randomUUID();
+      let events = [
+        { timestamp: now, run_id: 'hosted-demo', agent: 'travel_orchestrator', event: 'intent_classification_requested', status: 'started' },
+        { timestamp: now, run_id: 'hosted-demo', agent: 'travel_orchestrator', event: 'intent_classification_completed', status: 'success', intent: flightIntent ? 'flight_booking' : 'other' }
+      ];
+      if (!flightIntent) {
+        result.className = 'result ignored';
+        result.textContent = 'Hosted Hermes simulation classified this as unrelated to flight booking. No booking action was invoked.';
+      } else if (maxSpend === null) {
+        result.className = 'result blocked';
+        result.textContent = 'State an explicit maximum spend, for example ₹5,000.';
+      } else if (gate === 'without_warden') {
+        events.push({ timestamp: now, run_id: 'hosted-demo', agent: 'unsafe_demo_proxy', event: 'scope_bypassed', status: 'started', amount: 6000 });
+        result.className = 'result success';
+        result.textContent = 'Hosted simulation: without Warden, the ₹6,000 payment would be attempted despite the lower authorization.';
+      } else {
+        events.push(
+          { timestamp: now, run_id: 'hosted-demo', agent: 'warden', event: 'capability_issued', status: 'success', grant_id: grant, agent_id: 'booking', action: 'confirm_booking', resource: 'http://127.0.0.1:8080/', currency: 'INR', max_spend: maxSpend },
+          { timestamp: now, run_id: 'hosted-demo', agent: 'travel_orchestrator', event: 'capability_delegated', status: 'success', grant_id: grant, agent_id: 'booking' },
+          { timestamp: now, run_id: 'hosted-demo', agent: 'warden', event: 'capability_verified', status: 'success', grant_id: grant, agent_id: 'booking' },
+          { timestamp: now, run_id: 'hosted-demo', agent: 'warden', event: 'capability_consumed', status: 'success', grant_id: grant },
+          { timestamp: now, run_id: 'hosted-demo', agent: 'warden', event: 'scope_checked', allowed: 6000 <= maxSpend, amount: 6000, max_spend: maxSpend }
+        );
+        if (6000 > maxSpend) {
+          result.className = 'result blocked';
+          result.textContent = `Hosted simulation: Requested ₹6000 exceeds authorized limit of ₹${maxSpend}. No charge was made.`;
+        } else {
+          result.className = 'result success';
+          result.textContent = `Hosted simulation: both capability and scope gates allowed ₹6000. The public build does not call Dodo.`;
+        }
+      }
+      renderAudit(events);
+      autoState.className = 'auto-state';
+      autoState.textContent = 'Hosted simulation finished. Change the instruction or mode to run again.';
+    }
+
+    async function loadAudit() {
+      const timeline = document.querySelector('#timeline');
+      const refresh = document.querySelector('#refresh');
+      if (hostedShowcase) {
+        refresh.disabled = false;
+        refresh.textContent = 'Refresh';
+        if (!timeline.querySelector('.event')) timeline.innerHTML = '<div class="hint">Run a hosted request to populate this task-local audit view.</div>';
+        return;
+      }
+      refresh.disabled = true; refresh.textContent = 'Refreshing…';
+      try {
+        const response = await fetch(`/audit/events?limit=100&t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error();
+        const { events } = await response.json();
+        renderAudit(events);
+      } catch {
+        if (!timeline.querySelector('.event')) timeline.innerHTML = '<div class="hint">Audit trail is temporarily unavailable.</div>';
+      }
+      finally { refresh.disabled = false; refresh.textContent = 'Refresh'; }
+    }
+
+    function renderAudit(events) {
+      const timeline = document.querySelector('#timeline');
+      renderCapabilityChain(events);
+      timeline.replaceChildren(...events.slice().reverse().map(event => {
+        const el = document.createElement('div'); el.className = 'event';
+        const title = document.createElement('div'); title.textContent = `${event.agent} · ${event.event}`;
+        const meta = document.createElement('small');
+        const safe = Object.entries(event).filter(([k]) => !['agent', 'event', 'timestamp', 'run_id'].includes(k)).map(([k, v]) => `${k}=${v}`).join(' · ');
+        meta.textContent = `${new Date(event.timestamp).toLocaleTimeString()} · run ${event.run_id}${safe ? ' · ' + safe : ''}`;
+        el.append(title, meta); return el;
+      }));
+      if (!events.length) timeline.innerHTML = '<div class="hint">No events yet. Complete a request to create the first trail.</div>';
+    }
+
+    function renderCapabilityChain(events) {
+      const capabilityEvents = events.filter(event => event.event && event.event.startsWith('capability_') && event.grant_id);
+      const grant = capabilityEvents.length ? capabilityEvents[capabilityEvents.length - 1].grant_id : null;
+      const taskEvents = grant ? capabilityEvents.filter(event => event.grant_id === grant) : [];
+      const eventNames = new Set(taskEvents.map(event => event.event));
+      const steps = [...document.querySelectorAll('#capability-chain .cap-step')];
+      const required = ['capability_issued', 'capability_delegated', 'capability_verified', 'capability_consumed'];
+      steps.forEach((step, index) => {
+        step.className = 'cap-step';
+        if (eventNames.has(required[index])) step.classList.add('done');
+      });
+      if (eventNames.has('capability_rejected')) {
+        const rejected = taskEvents.find(event => event.event === 'capability_rejected');
+        const index = eventNames.has('capability_verified') ? 3 : 2;
+        steps[index].classList.add('rejected');
+        steps[index].textContent = `Rejected: ${rejected.reason || 'invalid'}`;
+      } else {
+        ['Issued', 'Delegated', 'Verified', 'Consumed'].forEach((label, index) => steps[index].textContent = label);
+      }
+      document.querySelector('#capability-grant').textContent = grant ? `grant ${grant}` : 'No capability task yet';
+    }
+    document.querySelector('#refresh').addEventListener('click', loadAudit);
+    loadAudit(); setInterval(loadAudit, 5000);
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Orchestrate Travel"
+  short_description: "Coordinate specialist travel agents safely"
+  default_prompt: "Use $orchestrate-travel to discover and book travel within my limit."
