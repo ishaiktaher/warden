@@ -1,683 +1,91 @@
 <!doctype html>
 <html lang="en">
-
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Warden — Agent Command Center</title>
+  <title>Warden Agent Control Plane</title>
   <style>
-    :root {
-      color-scheme: dark;
-      --ink: #f4f6f8;
-      --muted: #94a3b8;
-      --panel: #111827;
-      --line: #273449;
-      --cyan: #56d6c9;
-      --red: #ff7c83;
-      --amber: #f6c85f;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: radial-gradient(circle at 15% 0, #16324a 0, transparent 34%), #071019;
-      color: var(--ink);
-      font: 15px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
-    }
-
-    main {
-      width: min(1180px, calc(100% - 32px));
-      margin: 0 auto;
-      padding: 38px 0 60px;
-    }
-
-    header {
-      display: flex;
-      justify-content: space-between;
-      gap: 24px;
-      align-items: end;
-      margin-bottom: 28px;
-    }
-
-    .eyebrow {
-      color: var(--cyan);
-      letter-spacing: .16em;
-      text-transform: uppercase;
-      font-size: 12px;
-      font-weight: 800;
-    }
-
-    h1 {
-      margin: 6px 0 4px;
-      font-size: clamp(32px, 5vw, 58px);
-      line-height: 1;
-      letter-spacing: -.045em;
-    }
-
-    .subtitle,
-    .hint {
-      color: var(--muted);
-    }
-
-    .status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--muted);
-    }
-
-    .hosted-note {
-      display: none;
-      margin-bottom: 20px;
-      padding: 12px 14px;
-      border: 1px solid var(--amber);
-      border-radius: 12px;
-      background: #2a210a;
-      color: #ffe3a0;
-    }
-
-    .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--cyan);
-      box-shadow: 0 0 16px var(--cyan);
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.15fr) minmax(340px, .85fr);
-      gap: 20px;
-    }
-
-    .card {
-      background: color-mix(in srgb, var(--panel) 92%, transparent);
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 22px;
-      box-shadow: 0 18px 50px #0005;
-    }
-
-    h2 {
-      margin: 0 0 5px;
-      font-size: 18px;
-    }
-
-    textarea {
-      width: 100%;
-      min-height: 140px;
-      resize: vertical;
-      margin: 18px 0 10px;
-      border: 1px solid #33445c;
-      border-radius: 14px;
-      padding: 16px;
-      color: var(--ink);
-      background: #08121d;
-      font: inherit;
-      outline: none;
-    }
-
-    textarea:focus {
-      border-color: var(--cyan);
-      box-shadow: 0 0 0 3px #56d6c922;
-    }
-
-    .flow {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      padding: 10px 12px;
-      border-radius: 12px;
-      background: #0b1b28;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .kbd {
-      border: 1px solid #46566a;
-      border-bottom-width: 2px;
-      border-radius: 6px;
-      padding: 1px 6px;
-      color: var(--ink);
-    }
-
-    .facts {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin: 16px 0;
-    }
-
-    .fact {
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 11px;
-      color: var(--muted);
-    }
-
-    .fact b {
-      display: block;
-      color: var(--ink);
-      font-size: 18px;
-    }
-
-    a.fact {
-      text-decoration: none;
-      transition: border-color .15s, transform .15s;
-    }
-
-    a.fact:hover {
-      border-color: var(--cyan);
-      transform: translateY(-1px);
-    }
-
-    a.fact:after {
-      content: "Open page ↗";
-      display: block;
-      margin-top: 5px;
-      color: var(--cyan);
-      font-size: 12px;
-      font-weight: 750;
-    }
-
-    .modes {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin: 14px 0;
-    }
-
-    .mode {
-      position: relative;
-      cursor: pointer;
-    }
-
-    .mode input {
-      position: absolute;
-      opacity: 0;
-    }
-
-    .mode span {
-      display: block;
-      min-height: 84px;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: #091522;
-      color: var(--muted);
-    }
-
-    .mode b {
-      display: block;
-      color: var(--ink);
-      margin-bottom: 4px;
-    }
-
-    .mode input:checked+span {
-      border-color: var(--cyan);
-      box-shadow: 0 0 0 2px #56d6c922;
-    }
-
-    .mode.unsafe input:checked+span {
-      border-color: var(--red);
-      box-shadow: 0 0 0 2px #ff7c8322;
-    }
-
-    button {
-      border: 0;
-      border-radius: 11px;
-      padding: 12px 16px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
-    .primary {
-      width: 100%;
-      background: var(--cyan);
-      color: #03201d;
-    }
-
-    .secondary {
-      background: #1c2a3b;
-      color: var(--ink);
-    }
-
-    button:disabled {
-      opacity: .55;
-      cursor: wait;
-    }
-
-    .auto-state {
-      margin-top: 14px;
-      padding: 11px 13px;
-      border: 1px dashed #3a4c63;
-      border-radius: 11px;
-      color: var(--muted);
-      text-align: center;
-    }
-
-    .auto-state.active {
-      color: var(--cyan);
-      border-color: var(--cyan);
-    }
-
-    .result {
-      display: none;
-      margin-top: 14px;
-      border-radius: 12px;
-      padding: 13px;
-      background: #0b1b28;
-    }
-
-    .result.blocked {
-      display: block;
-      border-left: 3px solid var(--red);
-    }
-
-    .result.success {
-      display: block;
-      border-left: 3px solid var(--cyan);
-    }
-
-    .result.ignored {
-      display: block;
-      border-left: 3px solid var(--amber);
-    }
-
-    .agents {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin-top: 16px;
-    }
-
-    .agent {
-      padding: 10px;
-      border-radius: 10px;
-      background: #0a1520;
-      border: 1px solid var(--line);
-      font-size: 12px;
-    }
-
-    .agent b {
-      display: block;
-      color: var(--cyan);
-    }
-
-    .audit-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .timeline {
-      margin-top: 16px;
-      max-height: 510px;
-      overflow: auto;
-    }
-
-    .capability-panel {
-      margin-top: 16px;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: #091522;
-    }
-
-    .capability-chain {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 6px;
-      margin-top: 9px;
-    }
-
-    .cap-step {
-      position: relative;
-      padding: 8px 5px;
-      border: 1px solid #33445c;
-      border-radius: 8px;
-      color: var(--muted);
-      font-size: 10px;
-      text-align: center;
-    }
-
-    .cap-step.done { color: #03201d; border-color: var(--cyan); background: var(--cyan); }
-    .cap-step.rejected { color: #280508; border-color: var(--red); background: var(--red); }
-    .cap-grant { margin-top: 8px; color: var(--muted); font: 10px ui-monospace, monospace; }
-
-    .event {
-      position: relative;
-      margin-left: 8px;
-      padding: 0 0 18px 20px;
-      border-left: 1px solid #34445a;
-    }
-
-    .event:before {
-      content: "";
-      position: absolute;
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--cyan);
-      left: -5px;
-      top: 5px;
-    }
-
-    .event small {
-      color: var(--muted);
-    }
-
-    .event code {
-      color: var(--amber);
-    }
-
-    .tools {
-      margin-top: 20px;
-    }
-
-    .tool-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin-top: 16px;
-    }
-
-    .tool {
-      min-height: 108px;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: #091522;
-    }
-
-    .tool .kind {
-      color: var(--cyan);
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: .12em;
-      text-transform: uppercase;
-    }
-
-    .tool b {
-      display: block;
-      margin: 5px 0 3px;
-      font-size: 16px;
-    }
-
-    .tool p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    @media (max-width:850px) {
-      .grid {
-        grid-template-columns: 1fr
-      }
-
-      .agents,
-      .tool-grid {
-        grid-template-columns: 1fr 1fr
-      }
-
-      header {
-        align-items: start;
-        flex-direction: column
-      }
-    }
+    :root{--bg:#07111f;--panel:#0d1b2d;--panel2:#11243a;--line:#27405d;--text:#edf5ff;--muted:#91a7bf;--blue:#64a8ff;--green:#42d39b;--amber:#ffbe55;--red:#ff667d}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 15% 0,#102b4a 0,transparent 35%),var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,sans-serif}
+    main{width:min(1400px,94vw);margin:0 auto;padding:28px 0 60px}.top{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:22px}
+    h1{font-size:clamp(28px,4vw,48px);line-height:1;margin:8px 0}h2{font-size:19px;margin:0 0 12px}.eyebrow{color:var(--blue);font-weight:800;letter-spacing:.13em;text-transform:uppercase;font-size:11px}.muted{color:var(--muted)}
+    .status{display:flex;gap:8px;align-items:center;color:var(--green);font-weight:700}.dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 15px var(--green)}
+    .toolbar,.grid,.stats{display:grid;gap:14px}.toolbar{grid-template-columns:2fr repeat(4,auto);align-items:end}.grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px}.stats{grid-template-columns:repeat(6,1fr);margin:16px 0}
+    .card{background:linear-gradient(145deg,rgba(17,36,58,.95),rgba(10,24,41,.95));border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 18px 45px #0005}.stat b{display:block;font-size:26px;color:var(--blue)}
+    label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}input,textarea,select{width:100%;border:1px solid var(--line);border-radius:9px;background:#071524;color:var(--text);padding:10px;font:inherit}textarea{min-height:160px;font-family:ui-monospace,monospace;font-size:12px}
+    button,.button{border:0;border-radius:9px;background:var(--blue);color:#06111e;font-weight:800;padding:10px 14px;cursor:pointer;white-space:nowrap;text-decoration:none;display:inline-block}button.secondary,.button.secondary{background:#1b3451;color:var(--text);border:1px solid var(--line)}button.danger{background:var(--red)}button:disabled{opacity:.5;cursor:wait}
+    .table{overflow:auto;max-height:350px}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:11px;text-transform:uppercase}.pill{display:inline-block;border:1px solid var(--line);border-radius:100px;padding:2px 8px;font-size:11px}.active,.allow,.executed,.approved{color:var(--green)}.pending,.approval_required{color:var(--amber)}.denied,.revoked,.suspended{color:var(--red)}
+    .timeline{max-height:520px;overflow:auto}.event{border-left:2px solid var(--line);padding:5px 0 12px 14px;margin-left:5px}.event b{color:var(--blue)}.event code{color:var(--muted);font-size:11px}.result{white-space:pre-wrap;background:#06101d;border:1px solid var(--line);border-radius:10px;padding:12px;max-height:420px;overflow:auto;font-family:ui-monospace,monospace;font-size:12px}
+    details{margin-top:12px}summary{cursor:pointer;font-weight:800;color:var(--blue)}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    @media(max-width:950px){.toolbar,.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.top{display:block}.toolbar button{width:100%}}
   </style>
 </head>
+<body><main>
+  <header class="top"><div><div class="eyebrow">Privileged access management for AI agents</div><h1>Warden Control Plane</h1><div class="muted">Identity → capability → policy → approval → secret broker → connector → tamper-evident audit</div></div><div class="status"><span class="dot"></span><span id="health">Connecting…</span></div></header>
 
-<body>
-  <main>
-    <header>
-      <div>
-        <div class="eyebrow">AI as agency · enforced outside the model</div>
-        <h1>Warden</h1>
-        <div class="subtitle">Autonomous travel, bounded authority.</div>
-      </div>
-      <div class="status"><span class="dot"></span> Hard enforcement active</div>
-    </header>
-    <div class="hosted-note" id="hosted-note"><b>Hosted showcase:</b> agent and payment-provider boundaries are simulated. No Hermes, Supabase, vault, or Dodo credentials are deployed publicly. Run locally for the real integration.</div>
-    <div class="grid">
-      <section class="card">
-        <h2>Ask Warden to book</h2>
-        <div class="hint">Focus the box, activate Wispr Flow, and speak naturally.</div>
-        <textarea id="command" autofocus
-          placeholder="Book this flight. I authorize a maximum spend of ₹5,000."></textarea>
-        <div class="flow"><span class="kbd">Fn</span><span>Activate Wispr Flow and dictate. Warden infers explicit
-            authorization from your words.</span></div>
-        <div class="facts">
-          <a class="fact" href="http://127.0.0.1:8080" target="_blank" rel="noopener">Flight source<b>Malicious demo
-              page</b>HYD → BLR</a>
-          <div class="fact">Page price<b>₹6,000</b>Read-only booking evidence</div>
-        </div>
-        <div class="modes" role="radiogroup" aria-label="Enforcement comparison">
-          <label class="mode"><input type="radio" name="gate" value="warden" checked><span><b>Warden gate</b>Scope
-              checked before secrets or Dodo payment.</span></label>
-          <label class="mode unsafe"><input type="radio" name="gate" value="without_warden"><span><b>Without
-                Warden</b>Test-only deliberate bypass and charge.</span></label>
-        </div>
-        <div class="auto-state" id="auto-state">Waiting for Wispr Flow dictation…</div>
-        <div id="result" class="result"></div>
-        <div class="agents">
-          <div class="agent"><b>01 Orchestrator</b>Trusted user intent</div>
-          <div class="agent"><b>02 Discovery</b>Linkup evidence</div>
-          <div class="agent"><b>03 Booking</b>Warden request</div>
-          <div class="agent"><b>04 Voice</b>ElevenLabs result</div>
-        </div>
-      </section>
-      <aside class="card">
-        <div class="audit-head">
-          <div>
-            <h2>Agent audit trail</h2>
-            <div class="hint">Sanitized, append-only events</div>
-          </div><button class="secondary" id="refresh">Refresh</button>
-        </div>
-        <div class="capability-panel">
-          <div class="eyebrow">Signed capability</div>
-          <div id="capability-chain" class="capability-chain">
-            <div class="cap-step">Issued</div><div class="cap-step">Delegated</div>
-            <div class="cap-step">Verified</div><div class="cap-step">Consumed</div>
-          </div>
-          <div id="capability-grant" class="cap-grant">No capability task yet</div>
-        </div>
-        <div id="timeline" class="timeline">
-          <div class="hint">Loading audit events…</div>
-        </div>
-      </aside>
-    </div>
-    <section class="card tools">
-      <div class="eyebrow">Integrated stack</div>
-      <h2>Tools used</h2>
-      <div class="hint">Each tool has a bounded role; only the proxy can reach payment credentials.</div>
-      <div class="tool-grid">
-        <div class="tool"><span class="kind">Orchestration</span><b>Hermes Agent</b>
-          <p>Runs the orchestrator and isolated specialist agents.</p>
-        </div>
-        <div class="tool"><span class="kind">Voice input</span><b>Wispr Flow</b>
-          <p>Dictates trusted user intent into the command box.</p>
-        </div>
-        <div class="tool"><span class="kind">Discovery</span><b>Linkup</b>
-          <p>Finds live travel evidence, always labeled untrusted.</p>
-        </div>
-        <div class="tool"><span class="kind">Policy</span><b>Warden</b>
-          <p>Pure scope enforcement outside the model.</p>
-        </div>
-        <div class="tool"><span class="kind">Secrets</span><b>Supabase + Fernet</b>
-          <p>Stores the encrypted subscription reference.</p>
-        </div>
-        <div class="tool"><span class="kind">Payments</span><b>Dodo Payments</b>
-          <p>Creates test-mode on-demand subscription charges.</p>
-        </div>
-        <div class="tool"><span class="kind">Voice output</span><b>ElevenLabs</b>
-          <p>Speaks only sanitized booking outcomes.</p>
-        </div>
-        <div class="tool"><span class="kind">Application</span><b>FastAPI + Python</b>
-          <p>Hosts the proxy, UI, and audit API.</p>
-        </div>
-      </div>
+  <section class="card toolbar">
+    <div><label for="admin-key">Administrator key</label><input id="admin-key" type="password" placeholder="Required for management actions" autocomplete="off"></div>
+    <button id="bootstrap">Seed support scenario</button><button id="run">Run CASE-1042</button><button class="secondary" id="rotate">Rotate RS256 key</button><button class="danger" id="kill">Enable kill switch</button>
+  </section>
+
+  <section class="stats">
+    <div class="card stat"><span class="muted">Agents</span><b id="agent-count">–</b></div>
+    <div class="card stat"><span class="muted">Connectors</span><b id="connector-count">–</b></div>
+    <div class="card stat"><span class="muted">Connections</span><b id="connection-count">–</b></div>
+    <div class="card stat"><span class="muted">Pending approvals</span><b id="approval-count">–</b></div>
+    <div class="card stat"><span class="muted">Audit events</span><b id="audit-count">–</b></div>
+    <div class="card stat"><span class="muted">Audit integrity</span><b id="audit-valid">–</b></div>
+  </section>
+
+  <div class="grid">
+    <section class="card"><h2>Registered agents</h2><div class="table"><table><thead><tr><th>Identity</th><th>Owner</th><th>Purpose</th><th>State</th></tr></thead><tbody id="agents"></tbody></table></div>
+      <details><summary>Register a new agent manifest</summary><textarea id="agent-json">{"agent_id":"example-agent","name":"Example Agent","owner":"security","purpose":"Bounded example role","model_provider":"operator-managed","agent_version":"1.0.0","environment":"dev","risk_tier":"low","allowed_tools":["example"],"allowed_actions":["example.read","example.update"],"allowed_data_classifications":["internal"],"max_delegation_depth":0,"approved_parents":[],"approved_children":[]}</textarea><div class="actions"><button data-create="agent">Register pending agent</button></div></details>
     </section>
-  </main>
-  <script>
-    const command = document.querySelector('#command');
-    const result = document.querySelector('#result');
-    const autoState = document.querySelector('#auto-state');
-    const hostedShowcase = !['127.0.0.1', 'localhost'].includes(window.location.hostname);
-    let executionTimer;
-    let lastExecutionKey = '';
-
-    if (hostedShowcase) {
-      document.querySelector('#hosted-note').style.display = 'block';
-      document.querySelector('.status').lastChild.textContent = ' Hosted showcase active';
-    }
-
-    function scheduleExecution() {
-      clearTimeout(executionTimer);
-      const text = command.value.trim();
-      if (!text) { autoState.className = 'auto-state'; autoState.textContent = 'Waiting for Wispr Flow dictation…'; return; }
-      autoState.className = 'auto-state active';
-      autoState.textContent = 'Listening… execution starts after 2 seconds of silence.';
-      executionTimer = setTimeout(executeInstruction, 2000);
-    }
-
-    async function executeInstruction() {
-      if (!command.value.trim()) { result.className = 'result blocked'; result.textContent = 'Dictate a booking instruction with an explicit maximum spend.'; return; }
-      const gate = document.querySelector('input[name="gate"]:checked').value;
-      const executionKey = `${gate}:${command.value.trim()}`;
-      if (executionKey === lastExecutionKey) return;
-      lastExecutionKey = executionKey;
-      let confirmed = false;
-      if (gate === 'without_warden') {
-        confirmed = window.confirm('DEMO ONLY: This bypasses Warden and will create a real Dodo TEST-MODE charge of ₹6,000. Continue?');
-        if (!confirmed) { autoState.className = 'auto-state'; autoState.textContent = 'Unsafe test charge cancelled.'; return; }
-      }
-      autoState.className = 'auto-state active'; autoState.textContent = 'Hermes is classifying intent…'; result.className = 'result';
-      if (hostedShowcase) {
-        runHostedShowcase(gate, command.value.trim());
-        return;
-      }
-      try {
-        const response = await fetch('/demo/bookings/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instruction: command.value, gate, confirm_unsafe_test_charge: confirmed }) });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || 'The request failed safely.');
-        result.className = `result ${data.status}`;
-        if (data.status === 'ignored') result.textContent = data.message;
-        else if (data.status === 'blocked') result.textContent = `${data.reason} No charge was made. Price ₹${data.amount}; inferred authorization ₹${data.max_spend}.`;
-        else result.textContent = `Dodo test booking charged ₹${data.amount} with ${data.gate === 'warden' ? 'Warden enforcement' : 'the Warden gate bypassed'}.`;
-        renderAudit(data.audit_events || []);
-      } catch (error) { result.className = 'result blocked'; result.textContent = error.message; }
-      finally { autoState.className = 'auto-state'; autoState.textContent = 'Finished. Change the instruction or mode to run again.'; }
-    }
-
-    command.addEventListener('input', () => { lastExecutionKey = ''; scheduleExecution(); });
-    document.querySelectorAll('input[name="gate"]').forEach(input => input.addEventListener('change', () => { lastExecutionKey = ''; scheduleExecution(); }));
-
-    function runHostedShowcase(gate, text) {
-      const flightIntent = /\b(flight|fly|airline|book|booking)\b/i.test(text);
-      const amountMatch = text.replaceAll(',', '').match(/(?:₹|inr\s*)?(\d+(?:\.\d+)?)/i);
-      const maxSpend = amountMatch ? Number(amountMatch[1]) : null;
-      const now = new Date().toISOString();
-      const grant = crypto.randomUUID();
-      let events = [
-        { timestamp: now, run_id: 'hosted-demo', agent: 'travel_orchestrator', event: 'intent_classification_requested', status: 'started' },
-        { timestamp: now, run_id: 'hosted-demo', agent: 'travel_orchestrator', event: 'intent_classification_completed', status: 'success', intent: flightIntent ? 'flight_booking' : 'other' }
-      ];
-      if (!flightIntent) {
-        result.className = 'result ignored';
-        result.textContent = 'Hosted Hermes simulation classified this as unrelated to flight booking. No booking action was invoked.';
-      } else if (maxSpend === null) {
-        result.className = 'result blocked';
-        result.textContent = 'State an explicit maximum spend, for example ₹5,000.';
-      } else if (gate === 'without_warden') {
-        events.push({ timestamp: now, run_id: 'hosted-demo', agent: 'unsafe_demo_proxy', event: 'scope_bypassed', status: 'started', amount: 6000 });
-        result.className = 'result success';
-        result.textContent = 'Hosted simulation: without Warden, the ₹6,000 payment would be attempted despite the lower authorization.';
-      } else {
-        events.push(
-          { timestamp: now, run_id: 'hosted-demo', agent: 'warden', event: 'capability_issued', status: 'success', grant_id: grant, agent_id: 'booking', action: 'confirm_booking', resource: 'http://127.0.0.1:8080/', currency: 'INR', max_spend: maxSpend },
-          { timestamp: now, run_id: 'hosted-demo', agent: 'travel_orchestrator', event: 'capability_delegated', status: 'success', grant_id: grant, agent_id: 'booking' },
-          { timestamp: now, run_id: 'hosted-demo', agent: 'warden', event: 'capability_verified', status: 'success', grant_id: grant, agent_id: 'booking' },
-          { timestamp: now, run_id: 'hosted-demo', agent: 'warden', event: 'capability_consumed', status: 'success', grant_id: grant },
-          { timestamp: now, run_id: 'hosted-demo', agent: 'warden', event: 'scope_checked', allowed: 6000 <= maxSpend, amount: 6000, max_spend: maxSpend }
-        );
-        if (6000 > maxSpend) {
-          result.className = 'result blocked';
-          result.textContent = `Hosted simulation: Requested ₹6000 exceeds authorized limit of ₹${maxSpend}. No charge was made.`;
-        } else {
-          result.className = 'result success';
-          result.textContent = `Hosted simulation: both capability and scope gates allowed ₹6000. The public build does not call Dodo.`;
-        }
-      }
-      renderAudit(events);
-      autoState.className = 'auto-state';
-      autoState.textContent = 'Hosted simulation finished. Change the instruction or mode to run again.';
-    }
-
-    async function loadAudit() {
-      const timeline = document.querySelector('#timeline');
-      const refresh = document.querySelector('#refresh');
-      if (hostedShowcase) {
-        refresh.disabled = false;
-        refresh.textContent = 'Refresh';
-        if (!timeline.querySelector('.event')) timeline.innerHTML = '<div class="hint">Run a hosted request to populate this task-local audit view.</div>';
-        return;
-      }
-      refresh.disabled = true; refresh.textContent = 'Refreshing…';
-      try {
-        const response = await fetch(`/audit/events?limit=100&t=${Date.now()}`, { cache: 'no-store' });
-        if (!response.ok) throw new Error();
-        const { events } = await response.json();
-        renderAudit(events);
-      } catch {
-        if (!timeline.querySelector('.event')) timeline.innerHTML = '<div class="hint">Audit trail is temporarily unavailable.</div>';
-      }
-      finally { refresh.disabled = false; refresh.textContent = 'Refresh'; }
-    }
-
-    function renderAudit(events) {
-      const timeline = document.querySelector('#timeline');
-      renderCapabilityChain(events);
-      timeline.replaceChildren(...events.slice().reverse().map(event => {
-        const el = document.createElement('div'); el.className = 'event';
-        const title = document.createElement('div'); title.textContent = `${event.agent} · ${event.event}`;
-        const meta = document.createElement('small');
-        const safe = Object.entries(event).filter(([k]) => !['agent', 'event', 'timestamp', 'run_id'].includes(k)).map(([k, v]) => `${k}=${v}`).join(' · ');
-        meta.textContent = `${new Date(event.timestamp).toLocaleTimeString()} · run ${event.run_id}${safe ? ' · ' + safe : ''}`;
-        el.append(title, meta); return el;
-      }));
-      if (!events.length) timeline.innerHTML = '<div class="hint">No events yet. Complete a request to create the first trail.</div>';
-    }
-
-    function renderCapabilityChain(events) {
-      const capabilityEvents = events.filter(event => event.event && event.event.startsWith('capability_') && event.grant_id);
-      const grant = capabilityEvents.length ? capabilityEvents[capabilityEvents.length - 1].grant_id : null;
-      const taskEvents = grant ? capabilityEvents.filter(event => event.grant_id === grant) : [];
-      const eventNames = new Set(taskEvents.map(event => event.event));
-      const steps = [...document.querySelectorAll('#capability-chain .cap-step')];
-      const required = ['capability_issued', 'capability_delegated', 'capability_verified', 'capability_consumed'];
-      steps.forEach((step, index) => {
-        step.className = 'cap-step';
-        if (eventNames.has(required[index])) step.classList.add('done');
-      });
-      if (eventNames.has('capability_rejected')) {
-        const rejected = taskEvents.find(event => event.event === 'capability_rejected');
-        const index = eventNames.has('capability_verified') ? 3 : 2;
-        steps[index].classList.add('rejected');
-        steps[index].textContent = `Rejected: ${rejected.reason || 'invalid'}`;
-      } else {
-        ['Issued', 'Delegated', 'Verified', 'Consumed'].forEach((label, index) => steps[index].textContent = label);
-      }
-      document.querySelector('#capability-grant').textContent = grant ? `grant ${grant}` : 'No capability task yet';
-    }
-    document.querySelector('#refresh').addEventListener('click', loadAudit);
-    loadAudit(); setInterval(loadAudit, 5000);
-  </script>
-</body>
-
-</html>
+    <section class="card"><h2>Connector registry</h2><div class="table"><table><thead><tr><th>Connector</th><th>Action</th><th>Adapter</th><th>Risk</th></tr></thead><tbody id="connectors"></tbody></table></div>
+      <details><summary>Register a connector</summary><textarea id="connector-json">{"connector_id":"example-read","tool":"example","action":"example.read","adapter_type":"local_emulator","resource_patterns":["example://*"],"required_scopes":["example.read"],"owner":"platform","risk_tier":"low","rate_limit_per_minute":30}</textarea><div class="actions"><button data-create="connector">Register connector</button></div></details>
+    </section>
+    <section class="card"><h2>Credential connections & grants</h2><div class="muted">OAuth and managed credentials remain in Warden custody. Agents receive revocable grants, never the credential.</div><label>Principal identity</label><input id="credential-principal" value="user-demo"><div class="actions"><button class="secondary" id="load-credentials">Load</button><button id="connect-github">Connect GitHub</button></div><div class="table"><table><thead><tr><th>Account</th><th>Provider</th><th>State</th><th></th></tr></thead><tbody id="connections"></tbody></table></div><h2 style="margin-top:18px">Delegated grants</h2><div class="table"><table><thead><tr><th>Grant</th><th>Scopes</th><th>Restrictions</th><th></th></tr></thead><tbody id="grants"></tbody></table></div>
+      <details><summary>GitHub grant request</summary><textarea id="github-json">{"agent_id":null,"label":"github-default","provider_scopes":["repo"],"grant_scopes":["issues.create"],"allowed_methods":["POST"],"path_patterns":["/repos/acme/*"],"ttl_seconds":3600,"reason":"Allow a bounded GitHub task"}</textarea></details>
+    </section>
+    <section class="card"><h2>Human approvals</h2><div class="table"><table><thead><tr><th>Action</th><th>Resource</th><th>Agent</th><th>Status</th></tr></thead><tbody id="approvals"></tbody></table></div></section>
+    <section class="card"><h2>Verified output</h2><div id="scenario" class="result">Run the support-ticket scenario to create CRM, email draft, Jira and read-only review outputs.</div></section>
+    <section class="card"><h2>Hash-chained audit ledger</h2><div class="actions"><button class="secondary" id="refresh">Refresh</button><button class="secondary" id="verify">Verify chain</button><a class="button secondary" href="/audit/export.ndjson">Export NDJSON</a></div><div id="timeline" class="timeline"></div></section>
+    <section class="card"><h2>Policy bundle</h2><div class="muted">Deploy a new versioned policy. The previous active bundle is retired.</div><textarea id="policy-json">{"approval_for_production_writes":true,"approval_for_risk_tiers":["high","critical"],"deny_tools":["shell"],"sensitive_data_scope":"data:sensitive","max_anomaly_score":0.8,"allowed_geographies":[]}</textarea><div class="actions"><button data-create="policy">Activate policy</button><a class="button secondary" href="/documentation">Integration docs</a><a class="button secondary" href="/docs">OpenAPI</a></div></section>
+    <section class="card"><h2>Agent-owner onboarding</h2><div class="muted">Create an owner identity. Its API key is shown once; owners can submit arbitrary agent and connector manifests for administrator approval.</div><label>Owner ID</label><input id="owner-id" value="example-owner"><label>Display name</label><input id="owner-name" value="Example Agent Team"><div class="actions"><button id="create-owner">Create owner credentials</button></div><div id="owner-output" class="result">No owner created in this session.</div></section>
+  </div>
+</main>
+<script>
+  const $=s=>document.querySelector(s); const key=()=>$('#admin-key').value;
+  if(['127.0.0.1','localhost'].includes(location.hostname)) $('#admin-key').value='local-development-admin-key';
+  async function api(url, options={}){const headers={'Content-Type':'application/json',...(options.admin?{'X-Admin-Key':key()}:{}),...(options.headers||{})};const r=await fetch(url,{...options,headers});let body;try{body=await r.json()}catch{body={detail:await r.text()}}if(!r.ok)throw new Error(body.detail||`HTTP ${r.status}`);return body}
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  async function refresh(){
+    try{const [health,agents,connectors,approvals,events,verify]=await Promise.all([api('/health'),api('/admin/agents',{admin:true}),api('/admin/connectors',{admin:true}),api('/admin/approvals',{admin:true}),api('/audit/events?limit=200'),api('/audit/verify')]);
+      $('#health').textContent=`${health.environment} · gateway ready`;$('#kill').textContent=health.kill_switch?'Disable kill switch':'Enable kill switch';$('#kill').dataset.enabled=String(health.kill_switch);
+      $('#agent-count').textContent=agents.length;$('#connector-count').textContent=connectors.length;$('#approval-count').textContent=approvals.filter(a=>a.status==='pending').length;$('#audit-count').textContent=events.length;$('#audit-valid').textContent=verify.valid?'VALID':'FAILED';$('#audit-valid').className=verify.valid?'allow':'denied';
+      $('#agents').innerHTML=agents.map(a=>`<tr><td><b>${esc(a.name)}</b><br><code>${esc(a.agent_id)}</code></td><td>${esc(a.owner)}</td><td>${esc(a.purpose)}</td><td class="${esc(a.status)}">${esc(a.status)}${a.status==='pending'?`<br><button onclick="approveAgent('${esc(a.agent_id)}')">Approve</button>`:''}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">No agents registered</td></tr>';
+      $('#connectors').innerHTML=connectors.map(c=>`<tr><td><b>${esc(c.connector_id)}</b><br>${esc(c.tool)}</td><td>${esc(c.action)}</td><td>${esc(c.adapter_type)}</td><td>${esc(c.risk_tier)}${c.status==='pending'?`<br><button onclick="activateConnector('${esc(c.connector_id)}')">Approve</button>`:''}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">No connectors registered</td></tr>';
+      $('#approvals').innerHTML=approvals.map(a=>`<tr><td>${esc(a.action)}</td><td><code>${esc(a.resource)}</code></td><td>${esc(a.agent_id)}</td><td class="${esc(a.status)}">${esc(a.status)}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">No approvals</td></tr>';
+      $('#timeline').innerHTML=events.slice().reverse().map(e=>`<div class="event"><b>${esc(e.event_type)}</b> <span class="pill ${esc(e.decision)}">${esc(e.decision||e.actor)}</span><br><code>${esc(e.timestamp)} · ${esc(e.agent_id||'control-plane')} · ${esc((e.run_id||'').slice(0,8))}</code></div>`).join('');
+      await refreshCredentials();
+    }catch(e){$('#health').textContent=e.message;$('#health').style.color='var(--red)'}
+  }
+  $('#bootstrap').onclick=async()=>{try{await api('/admin/demo/bootstrap',{method:'POST',admin:true,body:'{}'});await refresh()}catch(e){alert(e.message)}};
+  $('#run').onclick=async()=>{const b=$('#run');b.disabled=true;$('#scenario').textContent='Executing controlled workflow…';try{const out=await api('/admin/demo/support-ticket',{method:'POST',admin:true,body:JSON.stringify({principal_id:'customer-success-user'})});$('#scenario').textContent=JSON.stringify(out,null,2);await refresh()}catch(e){$('#scenario').textContent=e.message}finally{b.disabled=false}};
+  $('#rotate').onclick=async()=>{try{const out=await api('/admin/keys/rotate',{method:'POST',admin:true,body:'{}'});alert(`Active key: ${out.kid}`);await refresh()}catch(e){alert(e.message)}};
+  $('#kill').onclick=async()=>{try{const enabled=$('#kill').dataset.enabled!=='true';await api('/admin/kill-switch',{method:'POST',admin:true,body:JSON.stringify({enabled})});await refresh()}catch(e){alert(e.message)}};
+  $('#refresh').onclick=refresh;$('#verify').onclick=async()=>{try{alert(JSON.stringify(await api('/audit/verify'),null,2))}catch(e){alert(e.message)}};
+  async function approveAgent(id){try{await api(`/admin/agents/${encodeURIComponent(id)}/approve`,{method:'POST',admin:true,body:'{}'});await refresh()}catch(e){alert(e.message)}}
+  async function activateConnector(id){try{await api(`/admin/connectors/${encodeURIComponent(id)}/status`,{method:'POST',admin:true,body:JSON.stringify({status:'active',reason:'Owner manifest approved'})});await refresh()}catch(e){alert(e.message)}}
+  document.querySelector('[data-create="agent"]').onclick=async()=>{try{await api('/admin/agents',{method:'POST',admin:true,body:$('#agent-json').value});await refresh()}catch(e){alert(e.message)}};
+  document.querySelector('[data-create="connector"]').onclick=async()=>{try{await api('/admin/connectors',{method:'POST',admin:true,body:$('#connector-json').value});await refresh()}catch(e){alert(e.message)}};
+  document.querySelector('[data-create="policy"]').onclick=async()=>{try{await api('/admin/policies',{method:'POST',admin:true,body:JSON.stringify({policy_id:'default',rules:JSON.parse($('#policy-json').value)})});await refresh()}catch(e){alert(e.message)}};
+  $('#create-owner').onclick=async()=>{try{const out=await api('/admin/owners',{method:'POST',admin:true,body:JSON.stringify({owner_id:$('#owner-id').value,name:$('#owner-name').value,roles:['agent-owner']})});$('#owner-output').textContent=JSON.stringify(out,null,2);await refresh()}catch(e){alert(e.message)}};
+  async function refreshCredentials(){const principal=$('#credential-principal').value.trim();if(!principal)return;try{const [connections,grants]=await Promise.all([api(`/me/connections?principal_id=${encodeURIComponent(principal)}`),api(`/me/grants?principal_id=${encodeURIComponent(principal)}`)]);$('#connection-count').textContent=connections.length;$('#connections').innerHTML=connections.map(c=>`<tr><td><b>${esc(c.account_identifier)}</b><br><code>${esc(c.connection_id.slice(0,8))}</code></td><td>${esc(c.provider_id)}</td><td class="${esc(c.status)}">${esc(c.status)}</td><td><button class="danger" onclick="revokeConnection('${esc(c.connection_id)}')">Revoke</button></td></tr>`).join('')||'<tr><td colspan="4" class="muted">No connections for this principal</td></tr>';$('#grants').innerHTML=grants.map(g=>`<tr><td><code>${esc(g.grant_id.slice(0,8))}</code><br>${esc(g.label)}</td><td>${esc(g.scopes.join(', '))}</td><td>${esc(g.allowed_methods.join(', ')||'any')}<br><code>${esc(g.path_patterns.join(', '))}</code></td><td><button class="secondary" onclick="delegateGrant('${esc(g.grant_id)}')">Delegate</button> <button class="danger" onclick="revokeGrant('${esc(g.grant_id)}')">Revoke</button></td></tr>`).join('')||'<tr><td colspan="4" class="muted">No grants</td></tr>'}catch(e){$('#connection-count').textContent='!';$('#connections').innerHTML=`<tr><td colspan="4" class="denied">${esc(e.message)}</td></tr>`}}
+  $('#load-credentials').onclick=refreshCredentials;
+  $('#connect-github').onclick=async()=>{try{const payload={...JSON.parse($('#github-json').value),principal_id:$('#credential-principal').value.trim()};const out=await api('/connect/github/start',{method:'POST',body:JSON.stringify(payload)});window.open(out.connect_url,'_blank','noopener,noreferrer')}catch(e){alert(e.message)}};
+  async function delegateGrant(id){const agent=prompt('Agent ID to receive this grant');if(!agent)return;try{await api(`/me/grants/${encodeURIComponent(id)}/delegate?principal_id=${encodeURIComponent($('#credential-principal').value.trim())}`,{method:'POST',body:JSON.stringify({agent_id:agent,reason:'Delegated from management UI'})});await refreshCredentials()}catch(e){alert(e.message)}}
+  async function revokeGrant(id){if(!confirm('Revoke this grant immediately?'))return;try{await api(`/me/grants/${encodeURIComponent(id)}/revoke?principal_id=${encodeURIComponent($('#credential-principal').value.trim())}`,{method:'POST',body:JSON.stringify({reason:'Revoked from management UI'})});await refreshCredentials();await refresh()}catch(e){alert(e.message)}}
+  async function revokeConnection(id){if(!confirm('Revoke this connection and all grants?'))return;try{await api(`/me/connections/${encodeURIComponent(id)}/revoke?principal_id=${encodeURIComponent($('#credential-principal').value.trim())}`,{method:'POST',body:JSON.stringify({reason:'Revoked from management UI'})});await refreshCredentials();await refresh()}catch(e){alert(e.message)}}
+  refresh();
+</script></body></html>

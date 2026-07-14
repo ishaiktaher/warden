@@ -4,3 +4,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 audit/*.jsonl
+data/
+.coverage
+htmlcov/
+.vercel/
+node_modules/
+sdk-js/dist/
+*.tgz

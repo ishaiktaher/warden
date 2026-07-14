@@ -5,6 +5,8 @@
 **/__pycache__
 **/*.pyc
 audit/*.jsonl
+data
+data/**
 tests
 proxy/tests
 enforcer/tests

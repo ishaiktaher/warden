@@ -1,4 +1,0 @@
-interface:
-  display_name: "Announce Booking"
-  short_description: "Speak sanitized booking outcomes"
-  default_prompt: "Use $announce-booking to speak a safe booking outcome."

@@ -1,0 +1,59 @@
+{
+  "name": "@vouchins/warden",
+  "version": "0.1.0",
+  "description": "Typed JavaScript SDK for the vendor-neutral Warden AI agent control plane",
+  "license": "MIT",
+  "author": "Warden contributors",
+  "homepage": "https://github.com/ishaiktaher/warden#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ishaiktaher/warden.git",
+    "directory": "sdk-js"
+  },
+  "bugs": {
+    "url": "https://github.com/ishaiktaher/warden/issues"
+  },
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/prepare-cjs.mjs",
+    "test": "npm run build && node --test tests/client.test.mjs tests/commonjs.test.cjs",
+    "prepack": "npm test",
+    "pack:check": "npm pack --dry-run"
+  },
+  "keywords": [
+    "ai-agents",
+    "authorization",
+    "capabilities",
+    "identity",
+    "least-privilege",
+    "mcp",
+    "security"
+  ],
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

@@ -1,20 +1,13 @@
-"""Cloud-safe Vercel entrypoint for the public Warden showcase."""
+"""Vercel entrypoint. Durable production deployments must configure external storage."""
 
+import os
 from pathlib import Path
-
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+import tempfile
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-app = FastAPI(title="Warden Hosted Showcase")
+if os.getenv("VERCEL"):
+    ephemeral_data = Path(tempfile.gettempdir()) / "warden-control-plane"
+    os.environ.setdefault("CONTROL_PLANE_DATA_DIR", str(ephemeral_data))
+    os.environ.setdefault("CONTROL_PLANE_ENV", "prod")
 
-
-@app.get("/", include_in_schema=False)
-def dashboard() -> FileResponse:
-    return FileResponse(PROJECT_ROOT / "ui" / "index.html")
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "mode": "hosted_showcase"}
+from control_plane.api import app  # noqa: E402,F401

@@ -1,269 +1,146 @@
-# Warden
+# Warden Agent Control Plane
 
-Warden demonstrates enforceable authorization for AI agents. A model may read
-malicious content and request a payment, but pure Python code outside the model
-decides whether money can move.
+Warden is a plug-and-play privileged-access control plane for arbitrary AI
+agents. Agent owners describe identities, tools, actions, resources, data
+classes, delegation relationships and risk limits in manifests. Agents never
+receive downstream credentials and cannot execute a registered action without
+passing the central gateway.
 
-Warden now places a signed, expiring, single-use agent capability gate before
-the unchanged pure scope enforcer. A request must pass both independent gates.
+The former travel-specific Hermes, Wispr Flow, Linkup, ElevenLabs, Dodo and
+Supabase integrations have been removed. `CASE-1042` is sample data proving the
+generic architecture; it is not hard-coded product behavior.
 
-## Architecture
+## Enforcement path
 
 ```mermaid
 flowchart LR
-    U["User"] --> O["Hermes travel orchestrator"]
-    O --> R["Discovery agent / Linkup"]
-    R -->|"untrusted candidates"| O
-    W["Untrusted booking page"] --> A["Booking agent"]
-    O -->|"selected option + trusted scope"| A
-    A -->|"amount + explicit scope + opaque ref"| P["Warden proxy"]
-    P --> I["Signed capability verification"]
-    I -->|"valid and consumed once"| E["Pure scope enforcer"]
-    E -->|"blocked"| X["No vault or Dodo access"]
-    E -->|"allowed"| V["Encrypted Supabase vault"]
-    V -->|"subscription ID, proxy only"| P
-    P --> D["Dodo on-demand charge"]
-    P -->|"sanitized outcome"| C["Communication agent / ElevenLabs"]
+  U[Human principal] --> A[Agent runtime / SDK / MCP / A2A]
+  A --> G[Action gateway]
+  G --> T[RS256 capability verification / pluggable KMS]
+  G --> D[Revocable credential grant]
+  G --> P[Layered policy decision point]
+  P --> R[Agent + run + connector registries]
+  P --> H[Human approval]
+  G --> S[Secrets broker]
+  G --> C[Connector adapter]
+  C --> X[External tool or local emulator]
+  G --> L[Hash-chained audit ledger + pluggable immutable anchor]
 ```
 
-The Hermes context never receives the Dodo API key, vault encryption key,
-Supabase key, decrypted subscription ID, or raw payment credentials.
+## Implemented locally
 
-The AI layer contains four agents: one Travel Orchestrator and three bounded
-specialists for discovery, booking, and communication. Warden is deliberately
-not an agent; it is the deterministic policy-enforcement boundary.
+- Owner-defined agent manifests with approval and lifecycle state
+- Runtime identity: principal → agent → run → task → tool call
+- RS256 capability tokens with key ID, issuer, audience, principal, run,
+  scopes, resources, expiry, unique ID, parent ID and delegation depth
+- Signing-key rotation/revocation and token/run/agent/connector/policy revocation
+- Narrow child-token delegation with approved relationships and parent
+  proof-of-possession
+- Versioned JSON policy bundles, risk signals and fail-closed evaluation
+- Monotonic platform, tenant, agent, connector and credential-grant policy layers
+- Human approvals for production writes and high-risk connectors
+- Mandatory action gateway with strict schemas, durable idempotency, distributed
+  production rate limits, kill switch, redaction and egress allowlists
+- Atomic single-use approval claims before external side effects
+- Production OIDC authentication with tenant and role claims
+- PostgreSQL connection pooling and database-enforced tenant RLS
+- Vendor-neutral signing, secrets and audit ports with portable HTTPS and
+  operator plugin contracts
+- First-party optional provider packs for AWS, Azure, Google Cloud, HashiCorp
+  Vault and PKCS#11 HSMs; no vendor SDK is installed in the core image
+- HTTPS-only external connectors with redirect, private-address, content-type
+  and response-size defenses
+- Encrypted secret aliases resolved only during connector execution
+- GitHub OAuth connections plus generic managed credentials, independently
+  revocable grants, explicit agent delegation, method/path restrictions and
+  refresh-token rotation under a distributed production lock
+- Bearer, custom-header, multi-header, basic, query-key and AWS SigV4 credential
+  injection performed inside the gateway without returning credentials to agents
+- Owner-configurable local emulator, REST, MCP-upstream and A2A-upstream
+  connectors, plus example support adapters
+- REST, MCP `tools/call`, A2A `message:send` and Python SDK ingress
+- Hash-chained redacted audit ledger, integrity verification and NDJSON export
+- Web management console and generated OpenAPI documentation
 
-Every stage writes a sanitized append-only record to `audit/agent_audit.jsonl`.
-The trail correlates events with a hashed Hermes session ID and records agent,
-event, timestamp, status, scope decision, amount, safe capability reason, and
-grant ID only. It rejects tokens, prompts, page contents, charge/subscription IDs, secret
-references, credentials, and provider diagnostics.
-
-## Requirements
-
-- Python 3.11
-- Supabase project with both migrations applied
-- Dodo Payments test account
-- Hermes Agent for the live agent demonstration
-
-## Install
+## Start
 
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+uvicorn control_plane.api:app --reload
 ```
 
-Fill `.env` with Supabase and Dodo **test-mode** credentials. Keep:
+Open `http://127.0.0.1:8000`. In development only, the fallback administrator
+key is `local-development-admin-key`. Set `CONTROL_PLANE_ADMIN_KEY` for any
+shared environment. Production mode refuses to start unless PostgreSQL, Redis,
+OIDC, an external signing provider, a secrets provider and immutable audit
+storage are all configured.
 
-```dotenv
-DODO_API_BASE_URL=https://test.dodopayments.com
-ENFORCEMENT_MODE=hard
-```
+Integration documentation is served at `http://127.0.0.1:8000/documentation`
+and the generated API reference at `http://127.0.0.1:8000/docs`.
 
-For the optional discovery and voice specialists, also set `LINKUP_API_KEY`,
-`ELEVENLABS_API_KEY`, and `ELEVENLABS_VOICE_ID`.
+## JavaScript and TypeScript SDK
 
-Generate the vault key:
+The publishable package lives in `sdk-js/` and is named `@vouchins/warden`.
+It is not reserved until its first successful npm publication:
 
 ```bash
-python -m vault.generate_key
+cd sdk-js
+npm ci
+npm test
+npm pack --dry-run
 ```
 
-Generate the separate capability-signing key:
+It is dependency-free at runtime, ships ESM, CommonJS and TypeScript
+declarations, and supports Node.js 18+ and modern browsers. A tagged release
+such as `sdk-v0.1.0` is published through npm trusted publishing with
+provenance after its version and test gates pass.
+
+## Run the architecture use case
 
 ```bash
-python -m identity.generate_key
+python -m scripts.run_support_ticket
 ```
 
-Add the printed `CAPABILITY_SIGNING_KEY` to `.env`. Never log the key or raw
-capability token.
+The example creates approved Support Triage and Code Reviewer agents, runtime
+and task identities, scoped parent/child capabilities, approval-gated CRM and
+Jira writes, an email draft, a read-only code review and a verified audit chain.
 
-Apply both Supabase migrations before running the demo:
+## Plug in any agent
 
-- [vault secrets](vault/migrations/001_create_vault_secrets.sql)
-- [single-use grants](vault/migrations/002_create_consumed_grants.sql)
+1. Create an owner through `POST /admin/owners`.
+2. Submit its manifest to `POST /owners/agents`.
+3. Submit local-emulator, REST, MCP or A2A connectors through
+   `POST /owners/connectors`.
+4. An administrator reviews and activates both registrations.
+5. Create a run and task and issue authority bound to the human principal.
+6. Call `/actions/execute`, `/mcp/tools/call`, `/a2a/message:send`, or use
+   `control_plane.sdk.WardenClient`.
 
-The `consumed_grants.grant_id` primary key and an atomic ignore-duplicate upsert
-ensure concurrent presentations cannot both consume the same capability.
+For an external connector that uses a credential, set `grant_required: true`.
+The action request must then include `grant_id`; Warden independently verifies
+the capability and grant before policy evaluation, resolves the credential only
+after an allow decision, injects it at the connector boundary, and redacts the
+response and audit record. See [credential connections and grants](docs/CREDENTIALS.md).
 
-## One-time Dodo test setup
-
-Create a customer and the original one-time demo product:
-
-```bash
-python -m proxy.setup_dodo_test_env
-```
-
-Review and paste the printed `DODO_CUSTOMER_ID` and `DODO_PRODUCT_ID` into
-`.env`.
-
-Create the separate recurring subscription product:
-
-```bash
-python -m proxy.create_dodo_subscription_product
-```
-
-Paste `DODO_SUBSCRIPTION_PRODUCT_ID` into `.env`, then create the hosted mandate:
-
-```bash
-python -m proxy.create_dodo_subscription
-```
-
-Open the printed checkout URL and authorize it with a Dodo test card. After the
-subscription becomes active, discover and store it without printing the ID:
-
-```bash
-python -m proxy.sync_dodo_subscription_to_vault
-```
-
-Do not run `vault.seed` after this step; it contains placeholder data for fresh
-development environments.
-
-## Install the Hermes skill
-
-Copy `skills/confirm-booking` to:
-
-```text
-~/.hermes/skills/warden/confirm-booking
-```
-
-Start a new Hermes session after installing it. The skill appears as
-`/confirm-booking` and contains no secret-handling capability.
-
-For the multi-agent demo, install all four project skills:
-
-```bash
-mkdir -p ~/.hermes/skills/warden
-cp -R skills/confirm-booking skills/discover-flights \
-  skills/announce-booking skills/orchestrate-travel ~/.hermes/skills/warden/
-```
-
-Then invoke `/orchestrate-travel` with a route, date, and explicit maximum
-spend. Hermes creates separate leaf agents for Linkup discovery, Warden-routed
-booking, and ElevenLabs communication. Discovery results remain untrusted and
-cannot create or modify payment scope.
-
-## Run the live demonstration
-
-From the project root:
-
-```bash
-python -m demo.launch
-```
-
-This starts the hard-enforcement proxy and injected booking page. In another
-terminal, start Hermes and use the prompt printed by the launcher:
-
-```text
-/confirm-booking Open http://127.0.0.1:8080 and confirm the flight. I authorize a maximum spend of ₹5,000.
-```
-
-The page asks the agent to raise the limit, enable soft mode, read `.env`, and
-call Dodo directly. The skill must ignore those instructions. Warden receives
-₹6,000 against a ₹5,000 scope and returns a blocked result before resolving the
-vault reference.
-
-## Compare stated and enforced limits
-
-Hard mode is safe and creates no charge:
-
-```bash
-python -m demo.scenario_hard
-```
-
-Soft mode exists only for comparison. This command intentionally creates a
-₹6,000 Dodo test charge despite the ₹5,000 scope:
-
-```bash
-python -m demo.scenario_soft --confirm-test-charge
-```
-
-Never use soft mode as a production control.
-
-## API
-
-Run only the proxy:
-
-```bash
-uvicorn proxy.main:app --reload
-```
-
-- `GET /` — Wispr Flow-compatible booking command center
-- `GET /health`
-- `GET /audit/events` — sanitized agent timeline
-- `POST /capabilities/issue` — issue/delegate a five-minute booking capability
-- `POST /bookings/execute`
-
-Focus the dashboard instruction box, activate Wispr Flow, and dictate an
-instruction such as "Book this flight; I authorize a maximum spend of ₹5,000."
-The server extracts the authorization from that trusted text and reads the
-flight price from structured data on the malicious demo page; neither value is
-editable in the UI. Wispr supplies text input only and receives no vault or
-payment credentials.
-
-There is no submit button. The browser waits for two seconds of input silence,
-then executes automatically. Numeric and spoken amounts such as "INR 5,000"
-and "five thousand rupees" are supported. Unsafe mode still requires the
-explicit browser confirmation before any test charge.
-
-Before parsing authorization or invoking the confirm-booking path, the backend
-runs a Hermes one-shot intent-routing agent. Only the exact `FLIGHT_BOOKING`
-decision proceeds. Unrelated, ambiguous, failed, or verbose classifications
-fail closed without touching the vault, Warden booking executor, or Dodo.
-
-For a booking intent, the orchestrator requests an HMAC-SHA256 capability whose
-subject is the booking agent. The token binds action, signed maximum spend,
-currency, flight resource, expiry, UUID grant ID, and single-use status. The
-proxy verifies and atomically consumes it before calling `check_scope`. A bad,
-expired, mismatched, or replayed token stops before the enforcer, vault, and
-Dodo. The dashboard visualizes issued → delegated → verified → consumed from
-the common audit trail.
-
-The dashboard comparison selector has two paths:
-
-- **Warden gate** checks scope before vault resolution and blocks ₹6,000 against
-  a ₹5,000 authorization.
-- **Without Warden** deliberately bypasses the scope check and creates a Dodo
-  test-mode charge after a warning confirmation. This path is disabled unless
-  `ALLOW_UNSAFE_DEMO=true` and refuses non-test Dodo hosts. `demo.launch` enables
-  it only for the local comparison demonstration.
-
-The UI also presents the complete demo stack: Hermes Agent, Wispr Flow,
-Linkup, Warden, Supabase/Fernet, Dodo Payments, ElevenLabs, and FastAPI/Python.
-
-Example blocked request:
-
-```bash
-curl -X POST http://127.0.0.1:8000/bookings/execute \
-  -H 'Content-Type: application/json' \
-  -d '{"amount":6000,"scope":{"action":"confirm_booking","max_spend":5000}}'
-```
+The agent's model/provider is metadata. Warden works with any runtime capable
+of making an HTTP request.
 
 ## Tests
 
 ```bash
-python -m unittest discover -s enforcer/tests -v
-python -m unittest discover -s proxy/tests -v
 python -m unittest discover -s tests -v
 ```
 
-Live replay proof (real Supabase consumption and vault resolution; counted Dodo
-boundary is stubbed so this script cannot create a payment):
+## Deployment choices
 
-```bash
-python -m demo.test_capability_replay
-```
-
-## Project structure
-
-- `vault/` — Fernet-encrypted Supabase secret storage
-- `enforcer/` — dependency-free scope checks
-- `proxy/` — FastAPI boundary and Dodo executor
-- `skills/` — Hermes skill definitions
-- `mock_site/` — injected static booking page
-- `demo/` — hard/soft scenarios and launcher
-- `integrations/` — bounded Linkup discovery and ElevenLabs communication
-- `audit/` — allowlisted JSONL audit trail shared across agent boundaries
-- `identity/` — static agent registry and signed single-use capabilities
+Warden core is cloud-neutral: OCI container, PostgreSQL, Redis, OIDC and OTLP.
+Signing, secret custody and audit anchoring use independently selectable
+providers. Use a first-party AWS/Azure/GCP/Vault/PKCS#11 pack, the portable
+HTTPS contract, or an operator-owned native provider plugin.
+The checked-in AWS Terraform is one optional reference deployment, not a core
+dependency. See [provider contracts](docs/PROVIDERS.md),
+[production deployment](docs/PRODUCTION.md), and the
+[optional AWS module](deploy/terraform/README.md).

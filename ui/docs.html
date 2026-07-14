@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Warden integration and production deployment documentation for AI agent developers.">
+  <title>Warden Documentation</title>
+  <style>
+    :root{--bg:#07111f;--panel:#102239;--line:#29435f;--text:#edf5ff;--muted:#9bb0c7;--blue:#6bb0ff;--green:#45d6a0}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 Inter,system-ui,sans-serif}a{color:var(--blue)}nav{position:fixed;inset:0 auto 0 0;width:270px;padding:28px 22px;background:#091728;border-right:1px solid var(--line);overflow:auto}nav b{font-size:23px}nav a{display:block;padding:7px 0;text-decoration:none;color:var(--muted)}nav a:hover{color:var(--text)}main{max-width:980px;margin-left:270px;padding:52px 6vw 100px}h1{font-size:48px;line-height:1.1;margin:0 0 16px}h2{margin-top:54px;border-top:1px solid var(--line);padding-top:30px}h3{margin-top:30px}.lead{font-size:20px;color:var(--muted)}.callout{border:1px solid var(--line);border-left:4px solid var(--green);border-radius:10px;background:var(--panel);padding:16px 18px}code{font-family:ui-monospace,SFMono-Regular,monospace}code:not(pre code){color:#a8d2ff;background:#10243a;padding:2px 5px;border-radius:4px}pre{background:#050d17;border:1px solid var(--line);border-radius:12px;padding:18px;overflow:auto;color:#d8eaff}.flow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:24px 0}.flow span{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;text-align:center;font-size:13px}.flow span+span:before{content:'→';color:var(--blue);margin-left:-20px;float:left}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted)}@media(max-width:850px){nav{position:static;width:auto}main{margin:0;padding:32px 6vw}.flow{grid-template-columns:1fr}.flow span+span:before{content:'↓';float:none;margin:0 8px 0 0}}
+  </style>
+</head>
+<body>
+<nav><b>Warden</b><p style="color:var(--muted)">Agent control plane</p><a href="index.html">Management console</a><a href="#quickstart">Quickstart</a><a href="#model">Security model</a><a href="#sdk">JavaScript SDK</a><a href="#agents">Register an agent</a><a href="#connections">Connections and grants</a><a href="#execute">Execute an action</a><a href="#production">Production checklist</a><a href="#operations">Operations</a><a href="openapi.html">OpenAPI reference</a></nav>
+<main>
+  <p style="color:var(--blue);font-weight:800;letter-spacing:.12em;text-transform:uppercase">Documentation</p><h1>Give any agent bounded, revocable authority.</h1><p class="lead">Warden sits between agent runtimes and real tools. It verifies identity, capabilities, delegated credentials, policy and approvals before an external side effect can occur.</p>
+  <div class="callout">Agents never receive provider credentials. Warden resolves and injects them only after every independent authorization boundary permits the action.</div>
+  <h2 id="quickstart">Quickstart</h2><pre><code>git clone https://github.com/ishaiktaher/warden.git
+cd warden
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn control_plane.api:app --reload</code></pre><p>Open the <a href="index.html">management console</a> or the generated <a href="openapi.html">OpenAPI reference</a>. Development defaults are intentionally rejected when <code>CONTROL_PLANE_ENV=prod</code>.</p>
+  <h2 id="model">Security model</h2><div class="flow"><span>Runtime identity</span><span>Capability</span><span>Credential grant</span><span>Layered policy</span><span>Approval</span><span>Connector</span></div><p>A failure at any stage prevents credential resolution and downstream network access. Capabilities bind agent, run, principal, scope, resources and expiry. Credential grants independently bind connection ownership, delegated agent, actions, methods, paths and expiry.</p>
+  <h2 id="sdk">JavaScript SDK</h2><pre><code>npm install @vouchins/warden</code></pre><pre><code>import { WardenClient } from "@vouchins/warden";
+
+const warden = new WardenClient({
+  baseUrl: "https://warden.example.com",
+  accessToken: process.env.WARDEN_RUNTIME_TOKEN,
+});
+
+const result = await warden.execute({
+  capability_token: capability,
+  runtime_proof: runtimeProof,
+  task_id: taskId,
+  connector_id: "github-issues",
+  action: "issues.create",
+  resource: "repo://acme/app",
+  environment: "prod",
+  grant_id: githubGrantId,
+  parameters: { title: "Investigate production alert" },
+});</code></pre><p>The package supports TypeScript, ESM, CommonJS, Node.js 18+ and modern browsers. It rejects plaintext remote control-plane URLs and generates a fresh idempotency nonce for each action unless one is supplied.</p>
+  <h2 id="agents">Register an agent</h2><pre><code>curl -X POST https://warden.example.com/owners/agents \
+  -H "Authorization: Bearer $OWNER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_id":"tenant--issue-agent",
+    "name":"Issue Agent",
+    "owner":"tenant",
+    "purpose":"Create bounded repository issues",
+    "model_provider":"any-runtime",
+    "agent_version":"1.0.0",
+    "environment":"prod",
+    "risk_tier":"medium",
+    "allowed_tools":["github"],
+    "allowed_actions":["issues.create"],
+    "allowed_data_classifications":["internal"],
+    "max_delegation_depth":0
+  }'</code></pre><p>An owner can submit a manifest but cannot approve it. Administrative review activates the identity and its immutable manifest version.</p>
+  <h2 id="connections">Connections and grants</h2><p>Configure a GitHub OAuth app, register its client-secret alias, then call <code>POST /connect/github/start</code>. The callback validates single-use state, verifies the GitHub user, stores the token through the selected secrets provider and delegates a bounded grant. Managed credentials support bearer, custom header, multi-header, Basic, query-key and AWS SigV4 injection.</p><table><thead><tr><th>Boundary</th><th>Examples</th></tr></thead><tbody><tr><td>Actions</td><td><code>issues.create</code>, <code>crm.read</code></td></tr><tr><td>Methods</td><td><code>GET</code>, <code>POST</code></td></tr><tr><td>Paths</td><td><code>/repos/acme/*</code></td></tr><tr><td>Lifetime</td><td>Grant expiry plus immediate revocation</td></tr></tbody></table>
+  <h2 id="execute">Execute an action</h2><p>All REST, MCP and A2A ingress converges on the same mandatory gateway. The action request carries the capability, runtime proof, task, connector, resource and optional credential grant. Responses are redacted and every decision is appended to the hash-chained audit ledger.</p>
+  <h2 id="production">Production checklist</h2><ul><li>PostgreSQL with TLS, backups, restore rehearsal and tenant RLS.</li><li>Redis with TLS for distributed rate limits and refresh locks.</li><li>OIDC issuer with tenant, role and on-behalf-of claims.</li><li>External KMS/HSM signing, secret custody and immutable audit anchoring.</li><li>TLS ingress and an explicit connector egress allowlist/firewall.</li><li>OTLP collector, SIEM alerts, SLOs and incident ownership.</li><li>Apply reviewed migrations in staging before canary deployment.</li><li>Run provider conformance, tenant-isolation, failure-injection and load tests.</li></ul>
+  <h2 id="operations">Operations</h2><p><code>/live</code> is a shallow process probe. <code>/ready</code> performs constant-time database and production Redis checks. <code>/health</code> exposes only basic service status. Run the authenticated <code>/audit/verify</code> operation separately so probes never rescan a growing ledger. Use the global kill switch for incident containment and export audit evidence as NDJSON.</p><p>Continue with the sections on <a href="#connections">credential connections</a>, <a href="#production">provider portability and production requirements</a>, and <a href="#operations">production operations</a>. The complete Markdown guides are included in the repository when the project is cloned.</p>
+</main></body></html>

@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: warden-control-plane
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: warden-config
+data:
+  CONTROL_PLANE_ENV: prod
+  CONTROL_PLANE_ISSUER: warden-control-plane
+  CONTROL_PLANE_AUDIENCE: warden-action-gateway
+  WARDEN_PUBLIC_URL: https://warden.example.com
+  WARDEN_SIGNING_PROVIDER: http
+  WARDEN_SECRETS_PROVIDER: http
+  WARDEN_AUDIT_PROVIDER: http
+  WARDEN_SIGNING_PROVIDER_URL: https://security-provider.example.com
+  WARDEN_SECRETS_PROVIDER_URL: https://security-provider.example.com
+  WARDEN_AUDIT_PROVIDER_URL: https://security-provider.example.com
+  CONTROL_PLANE_ALLOWED_EGRESS_HOSTS: api.github.com,security-provider.example.com
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: warden-control-plane
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {app: warden-control-plane}
+  template:
+    metadata:
+      labels: {app: warden-control-plane}
+    spec:
+      serviceAccountName: warden-control-plane
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: warden
+          image: ghcr.io/ishaiktaher/warden@sha256:replace-with-reviewed-digest
+          imagePullPolicy: IfNotPresent
+          ports: [{name: http, containerPort: 8000}]
+          envFrom:
+            - configMapRef: {name: warden-config}
+            # Required keys include DATABASE_URL, REDIS_URL,
+            # CONTROL_PLANE_ADMIN_KEY, WARDEN_OIDC_ISSUER,
+            # WARDEN_OIDC_AUDIENCE and WARDEN_PROVIDER_AUTH_TOKEN.
+            - secretRef: {name: warden-runtime}
+          env:
+            - {name: TMPDIR, value: /tmp}
+            - {name: CONTROL_PLANE_DATA_DIR, value: /tmp/warden}
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /live, port: http}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet: {path: /live, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: warden-control-plane
+spec:
+  selector: {app: warden-control-plane}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: warden-control-plane
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: warden-control-plane}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: warden-default-deny
+spec:
+  podSelector:
+    matchLabels: {app: warden-control-plane}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - {protocol: TCP, port: 8000}
+  # DNS only. Operators must add explicit CIDR/service policies for PostgreSQL,
+  # Redis, OIDC, OTLP, custody providers, and approved connector destinations.
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
