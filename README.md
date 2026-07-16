@@ -81,6 +81,9 @@ storage are all configured.
 Integration documentation is served at `http://127.0.0.1:8000/documentation`
 and the generated API reference at `http://127.0.0.1:8000/docs`.
 
+For a beginner-friendly explanation of every component and the complete action
+lifecycle, read [Warden, Explained from First Principles](docs/BEGINNERS_GUIDE.md).
+
 ## JavaScript and TypeScript SDK
 
 The publishable package lives in `sdk-js/` and is named `@vouchins/warden`.
