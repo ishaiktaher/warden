@@ -81,6 +81,12 @@ storage are all configured.
 Integration documentation is served at `http://127.0.0.1:8000/documentation`
 and the generated API reference at `http://127.0.0.1:8000/docs`.
 
+The Vercel entrypoint defaults to a separate read-only showcase. It never
+instantiates the control plane or mounts management/action endpoints. A real
+control-plane deployment must explicitly select `WARDEN_VERCEL_MODE=control-plane`
+and satisfy every production dependency; container deployment remains the
+recommended operating model.
+
 For a beginner-friendly explanation of every component and the complete action
 lifecycle, read [Warden, Explained from First Principles](docs/BEGINNERS_GUIDE.md).
 
@@ -97,9 +103,10 @@ npm pack --dry-run
 ```
 
 It is dependency-free at runtime, ships ESM, CommonJS and TypeScript
-declarations, and supports Node.js 18+ and modern browsers. A tagged release
-such as `sdk-v0.1.0` is published through npm trusted publishing with
-provenance after its version and test gates pass.
+declarations, and supports maintained Node.js 22+ and modern browsers. A tag
+that exactly matches the package version, such as `sdk-v0.2.0`, is published
+through npm trusted publishing with provenance after its version and test gates
+pass.
 
 ## Run the architecture use case
 

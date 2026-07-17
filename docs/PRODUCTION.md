@@ -25,6 +25,20 @@ anchoring are ports selected independently at deployment time. See
 
 ## Valid deployment combinations
 
+### Public website versus control plane
+
+`api/index.py` defaults to `WARDEN_VERCEL_MODE=showcase`. That application
+serves only the public website, static documentation and shallow status routes;
+it does not import the control-plane API. This is the supported configuration
+for the public Vercel project and requires no credentials.
+
+`WARDEN_VERCEL_MODE=control-plane` is an explicit opt-in that forces
+`CONTROL_PLANE_ENV=prod` and therefore fails closed unless PostgreSQL, Redis,
+OIDC and external custody providers are configured. A long-running OCI
+container is preferred for the real gateway because migrations, connection
+pools, connector isolation and predictable worker lifecycles are operationally
+clearer than a serverless function.
+
 These are examples, not an exhaustive list:
 
 | Compute | Database/cache | Signing | Secrets | Audit |
@@ -39,6 +53,17 @@ Mixing providers is supported. A customer is not required to use the same
 vendor for compute, identity, signing, secrets, audit, database or telemetry.
 
 ## Required operator inputs
+
+Run the offline, secret-safe configuration preflight before starting a
+production process:
+
+```bash
+CONTROL_PLANE_ENV=prod .venv/bin/python -m scripts.production_preflight
+```
+
+The command contacts no provider and never prints configuration values. Errors
+block startup readiness; warnings identify operational controls that need an
+explicit operator decision.
 
 1. Production PostgreSQL and Redis endpoints with TLS, backups and tested
    restore procedures.

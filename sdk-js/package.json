@@ -1,6 +1,6 @@
 {
   "name": "@vouchins/warden",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typed JavaScript SDK for the vendor-neutral Warden AI agent control plane",
   "license": "MIT",
   "author": "Warden contributors",

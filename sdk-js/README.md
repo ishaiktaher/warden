@@ -1,7 +1,8 @@
 # @vouchins/warden
 
 Typed, dependency-free JavaScript SDK for the Warden AI agent control plane.
-It supports Node.js 18+, modern browsers, ESM, CommonJS and TypeScript.
+It supports maintained Node.js 22+, modern browsers, ESM, CommonJS and
+TypeScript.
 
 ```bash
 npm install @vouchins/warden

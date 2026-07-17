@@ -10,15 +10,14 @@ Never hand-edit a generated lock file.
 
 ## JavaScript SDK
 
-The public package name is `@vouchins/warden`. Registry availability was
-checked during the 0.1.0 preparation, but a name is not reserved until the
-first successful publish.
+The public package name is `@vouchins/warden`; version `0.1.0` is published on
+npm. Releases after that initial manual bootstrap must use GitHub Actions
+trusted publishing and provenance.
 
 1. Confirm the publisher owns the `vouchins` npm user scope or has publish
    permission in the `vouchins` npm organization, then enable mandatory 2FA.
-2. Publish the package once from an authenticated maintainer account if npm
-   requires an existing package before trusted-publisher settings are available.
-   Always use `npm publish --access public` for this scoped public package.
+2. Do not publish from a maintainer workstation. The one-time bootstrap publish
+   is complete; all subsequent releases use the protected workflow below.
 3. In npm package settings, configure a GitHub Actions trusted publisher for:
    - repository: `ishaiktaher/warden`
    - workflow: `npm-release.yml`
@@ -37,16 +36,15 @@ first successful publish.
 7. Inspect the tarball file list. It must not contain `.env`, tests, repository
    history, credentials, source maps with secrets, or backend code.
 8. Merge the reviewed release commit, then create the exact matching tag. For
-   version `0.1.0`, the tag is `sdk-v0.1.0`.
+   version `0.2.0`, the tag is `sdk-v0.2.0`.
 9. The release workflow verifies the tag/version relationship and publishes
    with npm OIDC trusted publishing and provenance. No long-lived npm token is
    stored in GitHub.
-10. Install the exact published version in a clean Node 18 and Node 22 project
+10. Install the exact published version in clean Node 22 and Node 24 projects
    and exercise both `import` and `require` before announcing the release.
 
-If the npm name is taken before first publication, choose the organization
-scope, update package metadata and trusted-publisher configuration, and rerun
-the full package review. Never publish under a misleading third-party scope.
+Never reuse or overwrite an existing npm version. If a workflow fails after a
+version has reached the registry, prepare and review a new patch version.
 
 ## Documentation
 

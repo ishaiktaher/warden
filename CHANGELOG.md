@@ -3,6 +3,14 @@
 This project follows Semantic Versioning. Release notes document API, schema,
 policy and SDK compatibility separately.
 
+## 0.2.0 - Unreleased
+
+- Changed the JavaScript SDK support floor to maintained Node.js 22 and added
+  Node.js 24 verification.
+- Added a read-only public showcase deployment that never instantiates the
+  credential-bearing control plane.
+- Upgraded GitHub Pages and checkout actions to Node.js 24 releases.
+
 ## 0.1.0 - 2026-07-15
 
 - Added the vendor-neutral Warden identity and action control plane.

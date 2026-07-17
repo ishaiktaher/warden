@@ -39,7 +39,7 @@ const result = await warden.execute({
   environment: "prod",
   grant_id: githubGrantId,
   parameters: { title: "Investigate production alert" },
-});</code></pre><p>The package supports TypeScript, ESM, CommonJS, Node.js 18+ and modern browsers. It rejects plaintext remote control-plane URLs and generates a fresh idempotency nonce for each action unless one is supplied.</p>
+});</code></pre><p>The package supports TypeScript, ESM, CommonJS, maintained Node.js 22+ and modern browsers. It rejects plaintext remote control-plane URLs and generates a fresh idempotency nonce for each action unless one is supplied.</p>
   <h2 id="agents">Register an agent</h2><pre><code>curl -X POST https://warden.example.com/owners/agents \
   -H "Authorization: Bearer $OWNER_TOKEN" \
   -H "Content-Type: application/json" \

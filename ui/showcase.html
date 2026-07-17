@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Warden gives AI agents bounded, revocable authority over real tools.">
+  <title>Warden — Authorization for AI Agents</title>
+  <style>
+    :root{--bg:#07111f;--panel:#102239;--line:#29435f;--text:#edf5ff;--muted:#9bb0c7;--blue:#6bb0ff;--green:#45d6a0}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 12% 0,#12365b 0,transparent 38%),var(--bg);color:var(--text);font:16px/1.6 Inter,system-ui,sans-serif}a{color:inherit}.wrap{width:min(1120px,92vw);margin:auto}.nav{display:flex;align-items:center;justify-content:space-between;padding:24px 0}.brand{font-size:22px;font-weight:900}.links{display:flex;gap:20px;align-items:center}.links a{text-decoration:none;color:var(--muted)}.button{display:inline-block;padding:11px 16px;border-radius:9px;background:var(--blue);color:#07111f!important;font-weight:850;text-decoration:none}.hero{padding:82px 0 62px;max-width:900px}.eyebrow{color:var(--green);font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}h1{font-size:clamp(44px,8vw,82px);line-height:1.02;margin:16px 0 24px;letter-spacing:-.045em}.lead{font-size:clamp(19px,2.5vw,25px);color:var(--muted);max-width:780px}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:30px}.secondary{background:var(--panel);color:var(--text)!important;border:1px solid var(--line)}.flow,.grid{display:grid;gap:14px}.flow{grid-template-columns:repeat(6,1fr);margin:28px 0 70px}.flow div,.card{border:1px solid var(--line);background:linear-gradient(145deg,#10243a,#0b192a);border-radius:13px;padding:17px}.flow b{display:block;color:var(--blue);font-size:12px;margin-bottom:5px}.grid{grid-template-columns:repeat(3,1fr);padding-bottom:74px}.card h2{font-size:18px;margin:0 0 8px}.card p{color:var(--muted);margin:0}.proof{border-block:1px solid var(--line);padding:28px 0;margin-bottom:60px;display:grid;grid-template-columns:repeat(4,1fr);gap:18px}.proof b{display:block;font-size:30px;color:var(--green)}footer{border-top:1px solid var(--line);padding:28px 0 46px;color:var(--muted)}code{color:#aed5ff}@media(max-width:850px){.flow,.grid,.proof{grid-template-columns:1fr 1fr}.links a:not(.button){display:none}}@media(max-width:520px){.flow,.grid,.proof{grid-template-columns:1fr}.hero{padding-top:52px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="nav"><div class="brand">Warden</div><div class="links"><a href="/documentation">Documentation</a><a href="https://github.com/ishaiktaher/warden">GitHub</a><a class="button" href="https://www.npmjs.com/package/@vouchins/warden">Install SDK</a></div></nav>
+    <main>
+      <section class="hero"><div class="eyebrow">Identity and authorization infrastructure</div><h1>Give AI agents authority—not unlimited access.</h1><p class="lead">Warden sits between agent runtimes and real tools. It independently verifies identity, delegated authority, policy and approval before credentials are resolved or an external side effect occurs.</p><div class="actions"><a class="button" href="/documentation">Read the documentation</a><a class="button secondary" href="https://github.com/ishaiktaher/warden">View source</a></div></section>
+      <section class="flow" aria-label="Enforcement sequence"><div><b>01</b>Runtime identity</div><div><b>02</b>Signed capability</div><div><b>03</b>Credential grant</div><div><b>04</b>Layered policy</div><div><b>05</b>Human approval</div><div><b>06</b>Audited connector</div></section>
+      <section class="proof"><div><b>49</b>passing automated tests</div><div><b>3</b>protocol surfaces: REST, MCP, A2A</div><div><b>5</b>portable provider packs</div><div><b>0</b>runtime npm dependencies</div></section>
+      <section class="grid"><article class="card"><h2>Bounded delegation</h2><p>Short-lived capabilities bind principal, agent, run, action, resource and expiry. Child authority can only narrow.</p></article><article class="card"><h2>Credentials stay out of prompts</h2><p>Secrets remain in operator-selected custody and are injected only at the connector boundary after an allow decision.</p></article><article class="card"><h2>Fail-closed enforcement</h2><p>Revocation, replay protection, approvals, rate limits, kill switches and tamper-evident auditing run outside the model.</p></article></section>
+    </main>
+    <footer>This hosted surface is read-only and contains no production credentials. Deploy the control plane using the operator checklist in <code>docs/PRODUCTION.md</code>.</footer>
+  </div>
+</body>
+</html>
