@@ -271,9 +271,9 @@ cryptography==49.0.0 \
     # via
     #   -r requirements.in
     #   google-auth
-fastapi==0.139.0 \
-    --hash=sha256:99ab7b2d92223c76d6cf10757ab3f89d45b38267fc20b2a136cf02f6beac3145 \
-    --hash=sha256:cf15e1e9e667ddb0ad63811e60bd11390d1aac838ca4a7a23f421807b2308189
+fastapi==0.139.2 \
+    --hash=sha256:333145a6891e9b5b3cfceb69baf817e8240cde4d4588ae5a10bf56ffacb6255e \
+    --hash=sha256:b9ad015a835173d59865e2f5d8296fbc2b317bf56a2ba1a5bfbdd03de2fd4b1c
     # via -r requirements.in
 google-api-core==2.31.0 \
     --hash=sha256:2be84ee0f584c48e6bde1b36766e23348b361fb7e55e56135fc76ce1c397f9c2 \
@@ -296,13 +296,13 @@ google-cloud-core==2.6.0 \
     --hash=sha256:6d63ac8e5eca6d9e4319d0a1e2265fadcd7f1049904378caecfa01cf52dd869e \
     --hash=sha256:e76149739f90fac1fc6757c09f47eaccb3145b54adbd7759b0f7c4b235f46c83
     # via google-cloud-storage
-google-cloud-kms==3.15.0 \
-    --hash=sha256:5ca22f243c271d15351a3e9a36f8ace31c49b614c704d9b59b8f2b92ac6bb263 \
-    --hash=sha256:e31197570e8909e3741e857d9f414eb4120e59be6e9fa727177b0abe30ef3eac
+google-cloud-kms==3.16.0 \
+    --hash=sha256:ad3c102961ba58179f7261814d9cd28dded93603bd33c8224b4b072897bbe81e \
+    --hash=sha256:c89c66ccffc1358f973801ed1b45bd92b35ddbbc2545db9032af6d4643b20c76
     # via -r requirements-gcp.in
-google-cloud-secret-manager==2.29.0 \
-    --hash=sha256:21bac2d0adb0bb3c13c346d7223832f197c2266534528a1bf1402774e06395a3 \
-    --hash=sha256:ee64133af8fdb3780affb65ec6ccf10ab15a0113d8edeba388665f4be87ce1be
+google-cloud-secret-manager==2.30.0 \
+    --hash=sha256:0f285e77d09a73700e3fca9abbc77f844a50276989bf76d64a76b6e2b871e396 \
+    --hash=sha256:26ec87737731b483f7f95c26a8c7ab79e22cb66317c95006e7f6985dbc43c8a2
     # via -r requirements-gcp.in
 google-cloud-storage==3.13.0 \
     --hash=sha256:648af3ef8a6acc674e1359d3c920c67eb89a7a5ab66b336bd3ac43fed6b5ab84 \
