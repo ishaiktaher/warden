@@ -27,17 +27,18 @@ anchoring are ports selected independently at deployment time. See
 
 ### Public website versus control plane
 
-`api/index.py` defaults to `WARDEN_VERCEL_MODE=showcase`. That application
-serves only the public website, static documentation and shallow status routes;
-it does not import the control-plane API. This is the supported configuration
-for the public Vercel project and requires no credentials.
+`api/index.py` serves only the public website, static documentation and shallow
+status routes; it does not expose the control-plane API. This is the supported
+configuration for the public Vercel project and requires no credentials. It is
+intentionally impossible to switch this entrypoint into credential-bearing
+control-plane mode with an environment variable.
 
-`WARDEN_VERCEL_MODE=control-plane` is an explicit opt-in that forces
-`CONTROL_PLANE_ENV=prod` and therefore fails closed unless PostgreSQL, Redis,
-OIDC and external custody providers are configured. A long-running OCI
-container is preferred for the real gateway because migrations, connection
-pools, connector isolation and predictable worker lifecycles are operationally
-clearer than a serverless function.
+The checked-in `.python-version` pins the Vercel runtime to Python 3.12. The
+control plane remains compatible with Python 3.11 and 3.12 as verified by CI.
+
+Deploy the real gateway from the OCI image. A long-running container keeps
+migrations, connection pools, connector isolation and worker lifecycles
+operationally explicit.
 
 These are examples, not an exhaustive list:
 

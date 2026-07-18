@@ -81,11 +81,9 @@ storage are all configured.
 Integration documentation is served at `http://127.0.0.1:8000/documentation`
 and the generated API reference at `http://127.0.0.1:8000/docs`.
 
-The Vercel entrypoint defaults to a separate read-only showcase. It never
-instantiates the control plane or mounts management/action endpoints. A real
-control-plane deployment must explicitly select `WARDEN_VERCEL_MODE=control-plane`
-and satisfy every production dependency; container deployment remains the
-recommended operating model.
+The Vercel entrypoint is a separate read-only showcase. It cannot instantiate
+the control plane or mount management/action endpoints. Deploy the real gateway
+from the OCI image with every production dependency configured.
 
 For a beginner-friendly explanation of every component and the complete action
 lifecycle, read [Warden, Explained from First Principles](docs/BEGINNERS_GUIDE.md).

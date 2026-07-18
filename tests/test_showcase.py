@@ -6,7 +6,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from control_plane.showcase import app
+from api.index import app
 
 
 class ShowcaseTests(unittest.TestCase):
