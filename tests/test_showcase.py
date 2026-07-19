@@ -20,6 +20,13 @@ class ShowcaseTests(unittest.TestCase):
             self.assertEqual(response.headers["x-frame-options"], "DENY")
             self.assertIn("frame-ancestors 'none'", response.headers["content-security-policy"])
 
+        homepage = self.client.get("/")
+        self.assertIn("https://www.vouchins.com/images/logo.png", homepage.text)
+        self.assertIn(
+            "img-src 'self' data: https://www.vouchins.com",
+            homepage.headers["content-security-policy"],
+        )
+
         health = self.client.get("/health")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json()["mode"], "read-only")

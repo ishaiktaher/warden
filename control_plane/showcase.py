@@ -30,7 +30,7 @@ async def public_security_headers(request: Request, call_next):
     response.headers["Cache-Control"] = "public, max-age=300"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; "
+        "img-src 'self' data: https://www.vouchins.com; connect-src 'self'; frame-ancestors 'none'; "
         "base-uri 'self'; form-action 'none'"
     )
     response.headers["Referrer-Policy"] = "no-referrer"
