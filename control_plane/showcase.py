@@ -29,7 +29,7 @@ async def public_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "public, max-age=300"
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: https://www.vouchins.com; connect-src 'self'; frame-ancestors 'none'; "
         "base-uri 'self'; form-action 'none'"
     )
@@ -43,6 +43,11 @@ async def public_security_headers(request: Request, call_next):
 @app.get("/index.html", include_in_schema=False)
 def showcase() -> FileResponse:
     return FileResponse(ROOT / "ui" / "showcase.html")
+
+
+@app.get("/showcase.js", include_in_schema=False)
+def showcase_script() -> FileResponse:
+    return FileResponse(ROOT / "ui" / "showcase.js", media_type="text/javascript")
 
 
 @app.get("/documentation", include_in_schema=False)

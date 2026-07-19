@@ -40,7 +40,11 @@
     .auth-console,.flow-card,.price-card,.cta-box{background:linear-gradient(180deg,rgba(11,19,43,.94),rgba(4,8,22,.96))}
     .avatar{background:rgba(99,102,241,.14);color:#a5b4fc}.method,.secret{color:#818cf8}
     .check:before,.approved{border-color:rgba(79,209,197,.24);background:rgba(79,209,197,.07);color:#4fd1c5}.approved:before,.status:before{background:#4fd1c5}.ok,.live,.status{color:#4fd1c5}
-    .toggle-pill{border-color:rgba(79,209,197,.28);background:rgba(79,209,197,.07);color:#5eead4}
+    .toggle-pill{appearance:none;cursor:pointer;font:inherit;letter-spacing:inherit;border-color:rgba(255,255,255,.12);background:#080d1b;color:#768095;transition:border-color .18s ease,background .18s ease,color .18s ease,transform .18s ease}
+    .toggle-pill:hover{transform:translateY(-1px);border-color:rgba(79,209,197,.35);color:#cbd5e1}.toggle-pill:focus-visible{outline:2px solid #5eead4;outline-offset:3px}
+    .toggle-pill[aria-selected="true"]{border-color:rgba(79,209,197,.42);background:rgba(79,209,197,.09);color:#5eead4}.toggle-pill[data-scenario="malicious"][aria-selected="true"]{border-color:rgba(251,113,133,.45);background:rgba(251,113,133,.09);color:#fda4af}
+    .request-bar[data-decision="blocked"]{border-color:rgba(251,113,133,.32);background:rgba(127,29,29,.08)}.request-bar .evaluate[data-decision="approved"]{border-color:rgba(79,209,197,.28);color:#5eead4}.request-bar .evaluate[data-decision="blocked"]{border-color:rgba(251,113,133,.35);color:#fda4af}
+    .stage.block{border-color:rgba(251,113,133,.32);background:rgba(251,113,133,.06)}.stage.block strong{color:#fda4af}.pipe-box.blocked{border-color:rgba(251,113,133,.28)}.pipe-box.blocked .pipe-list{color:#fda4af}
     .stage.allow,.price-card.featured{border-color:rgba(79,209,197,.42)}.stage.allow strong,.price-list li:before{color:#4fd1c5}
     .cta-box{background:radial-gradient(circle at 50% 0,rgba(79,209,197,.14),transparent 42%),linear-gradient(180deg,#0b132b,#050919)}
     .footer{border-color:#e5e7eb;background:#fafafc;color:#0a1b5c}
@@ -106,14 +110,16 @@
     <section class="section shell" id="how-it-works">
       <div class="section-head"><div class="kicker">How it works</div><h2>Warden verifies, authorizes, and logs every agent action</h2><p>One SDK call replaces scattered authorization logic. Your model asks; Warden independently decides before credentials or external tools are touched.</p></div>
       <div class="flow-card">
-        <div class="flow-toggle"><span class="toggle-pill">● LEGITIMATE REQUEST</span><span class="toggle-pill toggle-off">● MALICIOUS REQUEST</span></div>
-        <div class="request-bar"><span><b>Agent books a flight within the user's authorized budget</b><span>booking-agent → POST api.vendor.com/bookings</span></span><span class="evaluate">EVALUATING…</span></div>
+        <div class="flow-toggle" role="tablist" aria-label="Authorization scenarios"><button class="toggle-pill" id="legitimate-tab" type="button" role="tab" aria-selected="true" aria-controls="authorization-demo" data-scenario="legitimate">● LEGITIMATE REQUEST</button><button class="toggle-pill" id="malicious-tab" type="button" role="tab" aria-selected="false" aria-controls="authorization-demo" data-scenario="malicious">● MALICIOUS REQUEST</button></div>
+        <div id="authorization-demo" role="tabpanel" aria-live="polite" aria-labelledby="legitimate-tab">
+        <div class="request-bar" id="scenario-request" data-decision="approved"><span><b id="scenario-title">Agent books a flight within the user's authorized budget</b><span id="scenario-route">booking-agent → POST api.vendor.com/bookings · amount ₹4,200</span></span><span class="evaluate" id="scenario-decision" data-decision="approved">APPROVED</span></div>
         <div class="pipeline">
-          <div class="pipe-box"><small>YOUR AGENTS</small><div class="pipe-list"><span>AI agent runtimes</span><span>MCP servers</span><span>Chatbots and apps</span></div></div>
+          <div class="pipe-box"><small>YOUR AGENTS</small><div class="pipe-list" id="scenario-agent"><span>Signed booking-agent identity</span><span>Capability: booking:create</span><span>Authorized maximum: ₹5,000</span></div></div>
           <div class="pipe-arrow">→</div>
-          <div class="pipe-box engine"><div class="engine-head"><b>⬡ warden</b><span class="live">● LIVE</span></div><div class="stages"><span class="stage"><strong>Identity</strong>Who is acting?</span><span class="stage"><strong>Capability</strong>What was delegated?</span><span class="stage"><strong>Policy</strong>Is it in scope?</span><span class="stage allow"><strong>Allow</strong>Inject and execute</span></div></div>
+          <div class="pipe-box engine"><div class="engine-head"><b>⬡ warden</b><span class="live">● LIVE</span></div><div class="stages"><span class="stage"><strong>Identity</strong><span id="identity-result">Verified agent</span></span><span class="stage"><strong>Capability</strong><span id="capability-result">Valid and unused</span></span><span class="stage"><strong>Policy</strong><span id="policy-result">₹4,200 ≤ ₹5,000</span></span><span class="stage allow" id="final-stage"><strong id="final-action">Allow</strong><span id="final-detail">Inject and execute</span></span></div></div>
           <div class="pipe-arrow">→</div>
-          <div class="pipe-box"><small>EXTERNAL SERVICES</small><div class="pipe-list"><span>OAuth and API keys</span><span>Operator-selected vaults</span><span>Audited API execution</span></div></div>
+          <div class="pipe-box" id="scenario-output"><small id="output-label">EXTERNAL SERVICES</small><div class="pipe-list" id="scenario-result"><span>Scoped credential injected</span><span>Flight booking executed</span><span>Success receipt audited</span></div></div>
+        </div>
         </div>
       </div>
       <div class="feature-grid">
@@ -139,5 +145,6 @@
   </main>
 
   <footer class="footer"><div class="shell"><div class="footer-grid"><div class="footer-about"><a class="brand" href="https://www.vouchins.com/warden"><img class="vouchins-logo" src="https://www.vouchins.com/images/logo.png" width="112" height="23" alt="Vouchins"><span class="product-divider" aria-hidden="true"></span><span class="product-name">Warden</span></a><p class="footer-copy">Warden is Vouchins' agentic identity and authorization product: bounded authority, portable custody, and enforcement outside the model.</p></div><div><h4>Warden</h4><div class="footer-links"><a href="/documentation">Docs</a><a href="#pricing">Pricing</a><a href="https://www.npmjs.com/package/@vouchins/warden">npm SDK</a><a href="https://github.com/ishaiktaher/warden">GitHub</a></div></div><div><h4>Vouchins</h4><div class="footer-links"><a href="https://www.vouchins.com/warden">Warden product page</a><a href="https://www.vouchins.com/about">About Vouchins</a><a href="https://www.vouchins.com/contact">Contact</a></div></div></div><div class="footer-bottom"><span>© 2026 Vouchins. Warden is a product of Vouchins.</span><span class="status">All systems operational</span></div></div></footer>
+  <script src="/showcase.js" defer></script>
 </body>
 </html>

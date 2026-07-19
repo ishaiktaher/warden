@@ -14,7 +14,7 @@ class ShowcaseTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def test_public_pages_and_health_are_available(self) -> None:
-        for path in ("/", "/documentation", "/openapi.html"):
+        for path in ("/", "/documentation", "/openapi.html", "/showcase.js"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200, path)
             self.assertEqual(response.headers["x-frame-options"], "DENY")
@@ -22,10 +22,18 @@ class ShowcaseTests(unittest.TestCase):
 
         homepage = self.client.get("/")
         self.assertIn("https://www.vouchins.com/images/logo.png", homepage.text)
+        self.assertIn('data-scenario="legitimate"', homepage.text)
+        self.assertIn('data-scenario="malicious"', homepage.text)
+        self.assertIn('<script src="/showcase.js" defer></script>', homepage.text)
         self.assertIn(
             "img-src 'self' data: https://www.vouchins.com",
             homepage.headers["content-security-policy"],
         )
+        self.assertIn("script-src 'self'", homepage.headers["content-security-policy"])
+
+        script = self.client.get("/showcase.js")
+        self.assertIn("Prompt injection attempts an unauthorized", script.text)
+        self.assertIn("Credential never resolved", script.text)
 
         health = self.client.get("/health")
         self.assertEqual(health.status_code, 200)
