@@ -29,7 +29,7 @@ class ShowcaseTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def test_public_pages_and_health_are_available(self) -> None:
-        for path in ("/", "/console", "/documentation", "/openapi.html", "/showcase.js"):
+        for path in ("/", "/console", "/documentation", "/openapi.html", "/showcase.js", "/proof"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200, path)
             self.assertEqual(response.headers["x-frame-options"], "DENY")
@@ -53,6 +53,10 @@ class ShowcaseTests(unittest.TestCase):
         health = self.client.get("/health")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json()["mode"], "read-only")
+        proof = self.client.get("/proof").json()
+        self.assertGreaterEqual(proof["test_cases"], 60)
+        self.assertEqual(3, proof["contract_tested_integrations"])
+        self.assertEqual(0, proof["live_verified_integrations"])
 
     def test_documentation_has_no_empty_or_broken_internal_links(self) -> None:
         response = self.client.get("/documentation")

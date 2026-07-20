@@ -4,6 +4,7 @@
 /deploy/ @ishaiktaher
 /.github/workflows/ @ishaiktaher
 /sdk-js/ @ishaiktaher
+/sdk-python/ @ishaiktaher
 /requirements.in @ishaiktaher
 /requirements.txt @ishaiktaher
 /requirements/ @ishaiktaher

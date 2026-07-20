@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vouchins-warden"
+version = "0.1.0"
+description = "Python SDK and CLI for the Warden AI-agent authorization control plane"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "Vouchins"}]
+keywords = ["ai-agents", "authorization", "identity", "oauth", "security"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://warden.vouchins.com"
+Documentation = "https://warden.vouchins.com/documentation"
+Repository = "https://github.com/ishaiktaher/warden"
+
+[project.scripts]
+warden = "vouchins_warden.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+vouchins_warden = ["py.typed"]

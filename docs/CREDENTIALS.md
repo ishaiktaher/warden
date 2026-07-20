@@ -79,6 +79,13 @@ Connector `credential_mode` values:
 - `query`: configured query parameter (use only where the provider requires it)
 - `aws_sigv4`: gateway-side SigV4 with configured service and region
 
+REST connectors use a Warden envelope (`resource` plus `parameters`) by
+default. APIs that require their native object at the JSON root can set
+`credential_config.request_body_mode` to `parameters`. This changes only the
+downstream serialization: Warden still authorizes the separate logical
+resource before resolving credentials or dispatching the request. Unknown body
+modes fail closed.
+
 Use `/me/connections` and `/me/grants` to inspect metadata, delegate a grant to
 an agent, or revoke a grant/connection. Audit events contain IDs, restrictions
 and decisions but never raw credentials.
@@ -96,3 +103,26 @@ runtime proof + capability
 ```
 
 Failure before credential resolution performs no external call.
+
+## Embedded Connect component
+
+The full control-plane deployment serves a dependency-free web component at
+`/warden-connect.js`. Add the customer application origin to
+`WARDEN_ALLOWED_ORIGINS`, load the module, then provide a function that returns
+the signed-in user's Warden access token:
+
+```html
+<script src="https://warden.example.com/warden-connect.js" defer></script>
+<warden-connect id="provider-connect"
+  base-url="https://warden.example.com"
+  agent-id="tenant--support-agent"
+  grant-scopes="tickets.read,tickets.update"></warden-connect>
+<script>
+  document.querySelector("#provider-connect").getAccessToken = async () =>
+    obtainWorkloadAccessToken();
+</script>
+```
+
+The component opens provider consent in a popup and polls only connection
+metadata. OAuth tokens stay in Warden custody. Production CORS rejects wildcard
+origins and accepts only explicit HTTPS origins.

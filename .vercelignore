@@ -12,6 +12,7 @@ migrations/
 requirements/
 scripts/
 sdk-js/
+sdk-python/
 tests/
 ARCHITECTURE.md
 CHANGELOG.md

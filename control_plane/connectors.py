@@ -181,16 +181,24 @@ class ConnectorDispatcher:
         headers = {"Content-Type": "application/json"}
         query_auth: dict[str, str] = {}
         try:
+            config = json.loads(connector["credential_config"] or "{}")
+            request_body_mode = config.get("request_body_mode", "warden_envelope")
+            if request_body_mode not in {"warden_envelope", "parameters"}:
+                raise ConnectorError("REST connector request body mode is invalid")
             body: Any
             if adapter_type == "mcp_upstream":
                 body = {"method": "tools/call", "params": {"name": connector["action"], "arguments": {"resource": resource, **parameters}}}
             elif adapter_type == "a2a_upstream":
                 body = {"message_type": "message:send", "action": connector["action"], "resource": resource, "parameters": parameters}
+            elif request_body_mode == "parameters":
+                # Native JSON APIs (such as CMS post endpoints) may require the
+                # caller's validated parameters at the body root. The logical
+                # resource is still evaluated independently by policy first.
+                body = parameters
             else:
                 body = {"resource": resource, "parameters": parameters}
             method = (connector["http_method"] or "POST").upper()
             credential = secret if isinstance(secret, dict) else ({"value": secret} if secret else None)
-            config = json.loads(connector["credential_config"] or "{}")
             if credential:
                 self._inject_credential(
                     headers, query_auth, credential,

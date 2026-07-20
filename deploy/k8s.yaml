@@ -20,6 +20,7 @@ data:
   WARDEN_SECRETS_PROVIDER_URL: https://security-provider.example.com
   WARDEN_AUDIT_PROVIDER_URL: https://security-provider.example.com
   CONTROL_PLANE_ALLOWED_EGRESS_HOSTS: api.github.com,security-provider.example.com
+  WARDEN_ALLOWED_ORIGINS: ""
 ---
 apiVersion: apps/v1
 kind: Deployment

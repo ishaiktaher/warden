@@ -8,6 +8,7 @@ signing, secret-custody, or audit-provider credentials.
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
@@ -54,6 +55,11 @@ def console_overview() -> FileResponse:
 @app.get("/showcase.js", include_in_schema=False)
 def showcase_script() -> FileResponse:
     return FileResponse(ROOT / "ui" / "showcase.js", media_type="text/javascript")
+
+
+@app.get("/proof")
+def proof() -> dict:
+    return json.loads((ROOT / "ui" / "proof.json").read_text(encoding="utf-8"))
 
 
 @app.get("/documentation", include_in_schema=False)

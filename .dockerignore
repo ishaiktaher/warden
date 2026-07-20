@@ -13,6 +13,7 @@ deploy
 docs
 migrations
 sdk-js
+sdk-python
 tests
 *.tgz
 .DS_Store

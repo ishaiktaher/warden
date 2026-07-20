@@ -1,0 +1,86 @@
+name: deploy-production-control-plane
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: "Reviewed GHCR image digest, including sha256: prefix"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: warden-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production-control-plane
+      url: https://warden.vouchins.com
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Validate immutable image reference
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "image_digest must contain exactly 64 lowercase hexadecimal characters" >&2
+            exit 1
+          }
+      - name: Configure Kubernetes access
+        env:
+          KUBE_CONFIG_BASE64: ${{ secrets.KUBE_CONFIG_BASE64 }}
+        run: |
+          install -d -m 0700 "$HOME/.kube"
+          printf '%s' "$KUBE_CONFIG_BASE64" | base64 --decode > "$HOME/.kube/config"
+          chmod 0600 "$HOME/.kube/config"
+          kubectl version --client
+      - name: Apply reviewed release manifests
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          kubectl kustomize deploy/production | sed "s|sha256:replace-with-reviewed-digest|${IMAGE_DIGEST}|g" | kubectl apply -f -
+      - name: Apply environment-specific non-secret configuration
+        env:
+          SIGNING_PROVIDER: ${{ vars.WARDEN_SIGNING_PROVIDER }}
+          SECRETS_PROVIDER: ${{ vars.WARDEN_SECRETS_PROVIDER }}
+          AUDIT_PROVIDER: ${{ vars.WARDEN_AUDIT_PROVIDER }}
+          SIGNING_URL: ${{ vars.WARDEN_SIGNING_PROVIDER_URL }}
+          SECRETS_URL: ${{ vars.WARDEN_SECRETS_PROVIDER_URL }}
+          AUDIT_URL: ${{ vars.WARDEN_AUDIT_PROVIDER_URL }}
+          EGRESS_HOSTS: ${{ vars.CONTROL_PLANE_ALLOWED_EGRESS_HOSTS }}
+          ALLOWED_ORIGINS: ${{ vars.WARDEN_ALLOWED_ORIGINS }}
+        run: |
+          kubectl -n warden create configmap warden-config \
+            --from-literal=CONTROL_PLANE_ENV=prod \
+            --from-literal=CONTROL_PLANE_ISSUER=warden-control-plane \
+            --from-literal=CONTROL_PLANE_AUDIENCE=warden-action-gateway \
+            --from-literal=WARDEN_PUBLIC_URL=https://warden.vouchins.com \
+            --from-literal=WARDEN_SIGNING_PROVIDER="$SIGNING_PROVIDER" \
+            --from-literal=WARDEN_SECRETS_PROVIDER="$SECRETS_PROVIDER" \
+            --from-literal=WARDEN_AUDIT_PROVIDER="$AUDIT_PROVIDER" \
+            --from-literal=WARDEN_SIGNING_PROVIDER_URL="$SIGNING_URL" \
+            --from-literal=WARDEN_SECRETS_PROVIDER_URL="$SECRETS_URL" \
+            --from-literal=WARDEN_AUDIT_PROVIDER_URL="$AUDIT_URL" \
+            --from-literal=CONTROL_PLANE_ALLOWED_EGRESS_HOSTS="$EGRESS_HOSTS" \
+            --from-literal=WARDEN_ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
+            --dry-run=client -o yaml | kubectl apply -f -
+      - name: Run schema migration with the release image
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          kubectl -n warden delete job warden-schema-migrate --ignore-not-found
+          sed "s|sha256:replace-with-reviewed-digest|${IMAGE_DIGEST}|g" deploy/k8s-migrate-job.yaml | kubectl -n warden apply -f -
+          kubectl -n warden wait --for=condition=complete job/warden-schema-migrate --timeout=300s
+      - name: Complete rollout after migration
+        run: |
+          kubectl -n warden rollout restart deployment/warden-control-plane
+          kubectl -n warden rollout status deployment/warden-control-plane --timeout=300s
+      - name: Verify public readiness
+        run: |
+          curl --fail --silent --show-error https://warden.vouchins.com/ready | jq -e '.status == "ready"'
+          curl --fail --silent --show-error https://warden.vouchins.com/health | jq -e '.status == "ok" and .service == "warden-agent-control-plane"'
