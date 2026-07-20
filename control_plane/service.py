@@ -472,10 +472,6 @@ class ControlPlane:
                 "approval_id": approval_id, "grant_id": grant_id,
                 "risk_signals": risk_signals or {},
             }).encode()).hexdigest()
-            previous = self._claim_execution(claims["jti"], request_nonce, request_hash)
-            if previous is not None:
-                return previous
-            execution_claimed = True
             run = self.database.one("SELECT * FROM runs WHERE run_id=?", (claims["run_id"],))
             agent = self.database.one("SELECT * FROM agents WHERE agent_id=?", (claims["agent_id"],))
             task = self.database.one("SELECT * FROM tasks WHERE task_id=? AND run_id=?", (task_id, claims["run_id"]))
@@ -484,6 +480,11 @@ class ControlPlane:
                 raise ControlPlaneError("Task identity is unavailable")
             if not connector or connector["action"] != action:
                 raise ControlPlaneError("Connector does not implement the requested action")
+            self._enforce_rate_limit(connector, claims["jti"])
+            previous = self._claim_execution(claims["jti"], request_nonce, request_hash)
+            if previous is not None:
+                return previous
+            execution_claimed = True
             grant = None
             if grant_id:
                 grant = self.credentials.authorize_grant(
@@ -494,7 +495,6 @@ class ControlPlane:
                     method=connector["http_method"] or "POST",
                     endpoint=connector["endpoint"] or resource,
                 )
-            self._enforce_rate_limit(connector, claims["jti"])
             self.database.execute(
                 "INSERT INTO tool_calls VALUES(?,?,?,?,?,?,?,?,NULL)",
                 (tool_call_id, claims["run_id"], task_id, connector_id, action, resource, "requested", _now()),
@@ -608,6 +608,46 @@ class ControlPlane:
             (self.database.namespace("global_kill_switch"),),
         )
         return bool(row and row["value"] == "true")
+
+    def reconcile_stale_operations(
+        self, actor: str, stale_after_seconds: int = 300,
+    ) -> dict[str, Any]:
+        """Fail closed when a worker disappears after claiming an operation."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(
+            seconds=stale_after_seconds
+        )).isoformat()
+        executions = self.database.all(
+            """SELECT token_jti,idempotency_key FROM execution_requests
+            WHERE status='processing' AND updated_at<? LIMIT 1000""", (cutoff,),
+        )
+        approvals = self.database.all(
+            """SELECT approval_id FROM approvals WHERE status='executing'
+            AND COALESCE(resolved_at,requested_at)<? LIMIT 1000""", (cutoff,),
+        )
+        uncertain = _json({
+            "status": "uncertain",
+            "reason": "Worker stopped after claiming execution; operator review required",
+        })
+        now = _now()
+        for row in executions:
+            self.database.execute(
+                """UPDATE execution_requests SET status='uncertain',response_json=?,updated_at=?
+                WHERE token_jti=? AND idempotency_key=? AND status='processing'""",
+                (uncertain, now, row["token_jti"], row["idempotency_key"]),
+            )
+        for row in approvals:
+            self.database.execute(
+                """UPDATE approvals SET status='uncertain',reason=?
+                WHERE approval_id=? AND status='executing'""",
+                ("Execution outcome requires operator reconciliation", row["approval_id"]),
+            )
+        result = {
+            "status": "completed", "stale_after_seconds": stale_after_seconds,
+            "executions_marked_uncertain": len(executions),
+            "approvals_marked_uncertain": len(approvals),
+        }
+        self.audit.append("maintenance.reconciled", actor, payload=result)
+        return result
 
     def bootstrap_support_demo(self, actor: str = "control-plane-admin") -> dict[str, Any]:
         if self.settings.production:
@@ -775,6 +815,10 @@ class ControlPlane:
                     response = json.loads(existing["response_json"])
                     response["idempotent_replay"] = True
                     return response
+                if existing["status"] == "uncertain":
+                    raise ControlPlaneError(
+                        "Action outcome is uncertain and requires operator reconciliation"
+                    )
                 raise ControlPlaneError("Action request is already in progress")
             connection.execute(
                 "INSERT INTO execution_requests VALUES(?,?,?,?,?,?,?)",

@@ -45,6 +45,12 @@ def showcase() -> FileResponse:
     return FileResponse(ROOT / "ui" / "showcase.html")
 
 
+@app.get("/console", include_in_schema=False)
+@app.get("/console.html", include_in_schema=False)
+def console_overview() -> FileResponse:
+    return FileResponse(ROOT / "ui" / "console.html")
+
+
 @app.get("/showcase.js", include_in_schema=False)
 def showcase_script() -> FileResponse:
     return FileResponse(ROOT / "ui" / "showcase.js", media_type="text/javascript")

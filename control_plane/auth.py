@@ -47,9 +47,13 @@ def _integer(value: str) -> int:
 
 
 class OIDCAuthenticator:
+    _MAX_TOKEN_BYTES = 16_384
+    _MAX_UNKNOWN_KEYS = 1_024
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self._keys: dict[str, dict[str, Any]] = {}
+        self._unknown_keys: dict[str, float] = {}
         self._keys_expire_at = 0.0
         self._lock = threading.Lock()
 
@@ -59,6 +63,8 @@ class OIDCAuthenticator:
         if not self.settings.oidc_issuer or not self.settings.oidc_audience:
             raise AuthenticationError("OIDC authentication is not configured")
         token = authorization[7:].strip()
+        if not token or len(token.encode()) > self._MAX_TOKEN_BYTES:
+            raise AuthenticationError("Access token exceeds the accepted size")
         try:
             header_part, payload_part, signature_part = token.split(".")
             header = json.loads(_decode(header_part))
@@ -108,12 +114,25 @@ class OIDCAuthenticator:
 
     def _key(self, kid: str) -> dict[str, Any]:
         now = time.monotonic()
+        unknown_until = self._unknown_keys.get(kid, 0.0)
+        if unknown_until > now:
+            raise AuthenticationError("Access-token signing key is unknown")
         if now >= self._keys_expire_at or kid not in self._keys:
             with self._lock:
+                now = time.monotonic()
+                if self._unknown_keys.get(kid, 0.0) > now:
+                    raise AuthenticationError("Access-token signing key is unknown")
                 if now >= self._keys_expire_at or kid not in self._keys:
                     self._refresh()
         key = self._keys.get(kid)
         if not key:
+            if len(self._unknown_keys) >= self._MAX_UNKNOWN_KEYS:
+                expired = [value for value, expiry in self._unknown_keys.items() if expiry <= now]
+                for value in expired:
+                    self._unknown_keys.pop(value, None)
+                if len(self._unknown_keys) >= self._MAX_UNKNOWN_KEYS:
+                    self._unknown_keys.pop(next(iter(self._unknown_keys)))
+            self._unknown_keys[kid] = now + min(self.settings.oidc_jwks_cache_seconds, 60)
             raise AuthenticationError("Access-token signing key is unknown")
         return key
 
@@ -137,5 +156,9 @@ class OIDCAuthenticator:
         self._keys = {
             key["kid"]: key for key in keys
             if key.get("kty") == "RSA" and key.get("use", "sig") == "sig"
+        }
+        self._unknown_keys = {
+            kid: expiry for kid, expiry in self._unknown_keys.items()
+            if expiry > time.monotonic() and kid not in self._keys
         }
         self._keys_expire_at = time.monotonic() + self.settings.oidc_jwks_cache_seconds

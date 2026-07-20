@@ -16,11 +16,12 @@ from .schemas import (
     CapabilityIssue, ConnectorManifest, DemoRun, KillSwitchRequest, MCPToolCall,
     PolicyCreate, RevokeRequest, RunCreate, SecretStore, StatusUpdate, TaskCreate,
     ConnectStart, GrantDelegate, ManagedConnectionCreate, OAuthProviderCreate,
-    OwnerCreate,
+    OwnerCreate, ReconcileRequest,
 )
 from .credentials import CredentialError
 from .service import ControlPlane, ControlPlaneError
 from .observability import configure_observability
+from .integrations import catalog, catalog_summary, get_integration
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,12 +37,16 @@ configure_observability(app, plane.settings)
 
 @app.middleware("http")
 async def production_identity_scope(request: Request, call_next):
-    if not plane.settings.production or request.url.path in {
-        "/health", "/live", "/ready", "/documentation", "/docs.html",
-        "/openapi.html", "/docs",
-        "/openapi.json", "/.well-known/warden-keys",
-        "/oauth/github/callback"
-    }:
+    public_path = request.url.path in {
+        "/", "/index.html", "/console", "/console.html", "/health", "/live", "/ready", "/documentation",
+        "/docs.html", "/openapi.html", "/docs", "/openapi.json",
+        "/.well-known/warden-keys", "/integrations", "/integrations/summary",
+    } or (request.url.path.startswith("/integrations/") and request.method == "GET")
+    oauth_callback = (
+        request.method == "GET" and request.url.path.startswith("/oauth/")
+        and request.url.path.endswith("/callback")
+    )
+    if not plane.settings.production or public_path or oauth_callback:
         return await call_next(request)
     try:
         principal = await run_in_threadpool(
@@ -127,6 +132,12 @@ def dashboard_alias() -> FileResponse:
     return dashboard()
 
 
+@app.get("/console", include_in_schema=False)
+@app.get("/console.html", include_in_schema=False)
+def management_console() -> FileResponse:
+    return dashboard()
+
+
 @app.get("/documentation", include_in_schema=False)
 def documentation() -> FileResponse:
     return FileResponse(ROOT / "ui" / "docs.html")
@@ -161,6 +172,36 @@ def ready() -> JSONResponse:
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": "warden-agent-control-plane"}
+
+
+@app.get("/integrations/summary")
+def integration_summary() -> dict:
+    return catalog_summary()
+
+
+@app.get("/integrations")
+def integrations(
+    kind: str | None = Query(default=None, pattern="^(oauth2|managed_secret)$"),
+    query: str | None = Query(default=None, max_length=100),
+) -> list[dict]:
+    return catalog(kind=kind, query=query)
+
+
+@app.get("/integrations/{integration_id:path}")
+def integration(integration_id: str) -> dict:
+    found = get_integration(integration_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="Unknown integration")
+    return found
+
+
+@app.get("/admin/status")
+def admin_status(_: Annotated[str, Depends(admin_actor)]) -> dict:
+    return {
+        "environment": plane.settings.environment,
+        "kill_switch": plane.kill_switch_enabled(),
+        "integrations": catalog_summary(),
+    }
 
 
 @app.post("/admin/demo/bootstrap")
@@ -336,6 +377,37 @@ def configure_github(
     ))
 
 
+@app.post("/admin/oauth/providers/{provider_id}")
+def configure_oauth_provider(
+    provider_id: str, request: OAuthProviderCreate,
+    actor: Annotated[str, Depends(admin_actor)],
+) -> dict:
+    if provider_id != request.provider_id:
+        raise HTTPException(status_code=400, detail="Provider ID does not match route")
+    required = {
+        "authorization_url": request.authorization_url,
+        "token_url": request.token_url,
+        "api_base_url": request.api_base_url,
+        "identity_url": request.identity_url,
+    }
+    if not all(required.values()):
+        raise HTTPException(
+            status_code=400,
+            detail="Custom OAuth providers require authorization, token, API base and identity URLs",
+        )
+    return guarded(lambda: plane.credentials.register_oauth_provider(
+        provider_id=provider_id, client_id=request.client_id,
+        client_secret_alias=request.client_secret_alias,
+        authorization_url=request.authorization_url or "",
+        token_url=request.token_url or "", api_base_url=request.api_base_url or "",
+        identity_url=request.identity_url or "",
+        identity_id_field=request.identity_id_field,
+        identity_label_field=request.identity_label_field,
+        scope_separator=request.scope_separator,
+        default_scopes=request.default_scopes, owner=actor,
+    ))
+
+
 @app.post("/admin/connections/managed")
 def create_managed_connection(
     request: ManagedConnectionCreate, actor: Annotated[str, Depends(admin_actor)]
@@ -355,12 +427,35 @@ def start_github_connect(request: Request, body: ConnectStart) -> dict:
     return guarded(lambda: plane.credentials.start_github_connect(**payload))
 
 
+@app.post("/connect/{provider_id}/start")
+def start_oauth_connect(provider_id: str, request: Request, body: ConnectStart) -> dict:
+    principal_id = body.principal_id
+    if plane.settings.production:
+        principal_id = request.state.principal.subject
+    payload = body.model_dump()
+    payload["principal_id"] = principal_id
+    return guarded(lambda: plane.credentials.start_oauth_connect(
+        provider_id=provider_id, **payload
+    ))
+
+
 @app.get("/oauth/github/callback")
 def github_callback(code: str, state: str) -> dict:
     def complete() -> dict:
         tenant = plane.credentials.oauth_state_tenant(state)
         with plane.database.tenant_scope(tenant):
             return plane.credentials.complete_github_connect(code=code, state=state)
+    return guarded(complete)
+
+
+@app.get("/oauth/{provider_id}/callback")
+def oauth_callback(provider_id: str, code: str, state: str) -> dict:
+    def complete() -> dict:
+        tenant = plane.credentials.oauth_state_tenant(state)
+        with plane.database.tenant_scope(tenant):
+            return plane.credentials.complete_oauth_connect(
+                provider_id=provider_id, code=code, state=state
+            )
     return guarded(complete)
 
 
@@ -505,6 +600,15 @@ def verify_audit(_: Annotated[str, Depends(audit_actor)]) -> dict:
 @app.post("/admin/audit/anchor")
 def anchor_audit(actor: Annotated[str, Depends(admin_actor)]) -> dict:
     return guarded(lambda: plane.audit.anchor(actor))
+
+
+@app.post("/admin/maintenance/reconcile")
+def reconcile_operations(
+    request: ReconcileRequest, actor: Annotated[str, Depends(admin_actor)],
+) -> dict:
+    return guarded(lambda: plane.reconcile_stale_operations(
+        actor, request.stale_after_seconds
+    ))
 
 
 @app.get("/audit/export.ndjson")

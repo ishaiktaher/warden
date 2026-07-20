@@ -49,7 +49,9 @@
     .cta-box{background:radial-gradient(circle at 50% 0,rgba(79,209,197,.14),transparent 42%),linear-gradient(180deg,#0b132b,#050919)}
     .footer{border-color:#e5e7eb;background:#fafafc;color:#0a1b5c}
     .footer .brand{color:#0a1b5c}.footer-copy,.footer-links a{color:#64748b}.footer h4{color:#0a1b5c}.footer-bottom{border-color:#e5e7eb;color:#94a3b8}
-    @media(max-width:620px){.nav{padding:0 14px}.vouchins-logo{width:94px}.product-divider{height:20px}.product-name{font-size:12px}.nav .button{padding:0 10px;font-size:11px}}
+    .price-grid{grid-template-columns:repeat(4,1fr)}.price-card{padding:25px;min-height:430px}.price{font-size:34px;margin-bottom:5px}.price-usage{color:#a1a6b0;font-size:12px;min-height:40px}.price-overage{color:#777e8b;font-size:11px;min-height:32px}.pricing-note{text-align:center;color:#686f7b;font-size:12px;margin:24px 0 0}
+    @media(max-width:1050px){.price-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:620px){.price-grid{grid-template-columns:1fr}.price-card{min-height:auto}.nav{padding:0 14px}.vouchins-logo{width:94px}.product-divider{height:20px}.product-name{font-size:12px}.nav .button{padding:0 10px;font-size:11px}}
   </style>
 </head>
 <body>
@@ -132,12 +134,14 @@
 
     <section class="section pricing" id="pricing">
       <div class="shell">
-        <div class="section-head"><div class="kicker">Pricing</div><h2>Start with one agent. Secure the whole fleet.</h2><p>Flexible plans from Vouchins for developers exploring Warden and teams taking autonomous agents into production.</p></div>
+        <div class="section-head"><div class="kicker">Pricing</div><h2>Simple, transparent pricing.</h2><p>Start free with unlimited users, agents, applications, and connections. Upgrade when your production traffic grows.</p></div>
         <div class="price-grid">
-          <article class="price-card"><h3>Developer</h3><p>Build and test Warden with local providers.</p><div class="price">$0 <small>/ forever</small></div><ul class="price-list"><li>Open-source control plane</li><li>REST, MCP, and A2A gateways</li><li>JavaScript SDK</li><li>Local development custody</li></ul><a class="button secondary" href="/documentation">Read the Docs</a></article>
-          <article class="price-card featured"><span class="popular">EARLY ACCESS</span><h3>Team</h3><p>Operate production agents with shared controls.</p><div class="price">Custom</div><ul class="price-list"><li>External KMS, vault, and audit providers</li><li>OIDC and tenant isolation</li><li>Approvals, policies, and kill switches</li><li>Deployment and integration support</li></ul><a class="button" href="https://www.vouchins.com/contact">Join Early Access <span class="arrow">→</span></a></article>
-          <article class="price-card"><h3>Enterprise</h3><p>High-assurance deployments and custom controls.</p><div class="price">Let's talk</div><ul class="price-list"><li>Private-cloud and on-premise options</li><li>Custom provider integrations</li><li>Security architecture review</li><li>Priority engineering support</li></ul><a class="button secondary" href="https://www.vouchins.com/contact">Contact Vouchins</a></article>
+          <article class="price-card"><h3>Free</h3><p>For developers evaluating Warden.</p><div class="price">$0 <small>/ month</small></div><div class="price-usage">10,000 authorized API calls per month</div><div class="price-overage">Hard cap · no credit card required</div><ul class="price-list"><li>Unlimited users, agents, apps, and connections</li><li>All platform features</li><li>30-day audit retention</li><li>Community support</li></ul><a class="button secondary" href="https://www.vouchins.com/contact">Get Early Access</a></article>
+          <article class="price-card featured"><span class="popular">POPULAR</span><h3>Starter</h3><p>For small teams shipping integrations.</p><div class="price">$50 <small>/ month</small></div><div class="price-usage">100,000 authorized API calls included</div><div class="price-overage">$0.50 per additional 1,000 calls</div><ul class="price-list"><li>Everything in Free</li><li>Unlimited audit retention</li><li>Custom branding</li><li>Dedicated support channel</li></ul><a class="button" href="https://www.vouchins.com/contact">Start 14-Day Trial <span class="arrow">→</span></a></article>
+          <article class="price-card"><h3>Growth</h3><p>For scaling production workloads.</p><div class="price">$250 <small>/ month</small></div><div class="price-usage">1,000,000 authorized API calls included</div><div class="price-overage">$0.50 per additional 1,000 calls</div><ul class="price-list"><li>Everything in Starter</li><li>Production OIDC identity providers</li><li>Dedicated support</li><li>Service-level agreement</li></ul><a class="button secondary" href="https://www.vouchins.com/contact">Start 14-Day Trial</a></article>
+          <article class="price-card"><h3>Enterprise</h3><p>For high-assurance organizations.</p><div class="price">Custom</div><div class="price-usage">Custom API-call volume</div><div class="price-overage">Annual agreement</div><ul class="price-list"><li>Everything in Growth</li><li>Custom integrations</li><li>Private-cloud and custom networking</li><li>Security architecture support</li></ul><a class="button secondary" href="https://www.vouchins.com/contact">Contact Vouchins</a></article>
         </div>
+        <p class="pricing-note">An authorized API call is a Warden gateway request that invokes a downstream provider. Management and catalog requests do not count toward usage.</p>
       </div>
     </section>
 

@@ -51,7 +51,7 @@ export interface ActionResult {
   result?: Record<string, unknown>;
 }
 
-export interface GithubConnectRequest {
+export interface OAuthConnectRequest {
   principal_id: string;
   agent_id?: string | null;
   label?: string;
@@ -61,6 +61,18 @@ export interface GithubConnectRequest {
   path_patterns?: string[];
   ttl_seconds?: number | null;
   reason: string;
+}
+
+export type GithubConnectRequest = OAuthConnectRequest;
+
+export interface Integration {
+  integration_id: string;
+  name: string;
+  kind: "oauth2" | "managed_secret";
+  setup_mode: "oauth_provider_configuration" | "managed_secret_template";
+  docs_url: string;
+  credential_modes: string[];
+  status: "supported";
 }
 
 export interface CredentialConnection {
@@ -207,6 +219,27 @@ export class WardenClient {
     options?: RequestOptions,
   ): Promise<{ provider_id: "github"; connect_url: string; expires_at: string }> {
     return this.request("POST", "/connect/github/start", input, options);
+  }
+
+  startOAuthConnect(
+    providerId: string,
+    input: OAuthConnectRequest,
+    options?: RequestOptions,
+  ): Promise<{ provider_id: string; connect_url: string; expires_at: string }> {
+    return this.request(
+      "POST", `/connect/${encodeURIComponent(providerId)}/start`, input, options,
+    );
+  }
+
+  listIntegrations(
+    filters: { kind?: "oauth2" | "managed_secret"; query?: string } = {},
+    options?: RequestOptions,
+  ): Promise<Integration[]> {
+    const params = new URLSearchParams();
+    if (filters.kind) params.set("kind", filters.kind);
+    if (filters.query) params.set("query", filters.query);
+    const query = params.toString();
+    return this.request("GET", `/integrations${query ? `?${query}` : ""}`, undefined, options);
   }
 
   listConnections(

@@ -41,6 +41,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual({"status": "ok"}, self.client.get("/live").json())
         self.assertEqual(200, self.client.get("/documentation").status_code)
         self.assertEqual(200, self.client.get("/index.html").status_code)
+        self.assertIn("Warden Control Plane", self.client.get("/console").text)
         self.assertEqual(200, self.client.get("/openapi.html").status_code)
         self.assertEqual(401, self.client.get("/admin/agents").status_code)
         self.assertEqual(200, self.client.get("/admin/agents", headers=self.admin).status_code)

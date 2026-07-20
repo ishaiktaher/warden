@@ -159,6 +159,10 @@ CREATE TABLE IF NOT EXISTS oauth_providers (
   authorization_url TEXT NOT NULL,
   token_url TEXT NOT NULL,
   api_base_url TEXT NOT NULL,
+  identity_url TEXT NOT NULL DEFAULT '',
+  identity_id_field TEXT NOT NULL DEFAULT 'id',
+  identity_label_field TEXT NOT NULL DEFAULT 'name',
+  scope_separator TEXT NOT NULL DEFAULT ' ',
   default_scopes TEXT NOT NULL,
   status TEXT NOT NULL,
   owner TEXT NOT NULL,
@@ -402,6 +406,27 @@ class Database:
                 connection.execute(
                     "ALTER TABLE policy_bundles ADD COLUMN target_id TEXT NOT NULL DEFAULT '*'"
                 )
+            oauth_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(oauth_providers)")
+            }
+            for name, definition in (
+                ("identity_url", "TEXT NOT NULL DEFAULT ''"),
+                ("identity_id_field", "TEXT NOT NULL DEFAULT 'id'"),
+                ("identity_label_field", "TEXT NOT NULL DEFAULT 'name'"),
+                ("scope_separator", "TEXT NOT NULL DEFAULT ' '"),
+            ):
+                if name not in oauth_columns:
+                    connection.execute(
+                        f"ALTER TABLE oauth_providers ADD COLUMN {name} {definition}"
+                    )
+        # The development database contains private signing material and may
+        # contain encrypted connector credentials. Never inherit a permissive
+        # process umask for this file.
+        path.chmod(0o600)
+
+    def acquire_audit_lock(self, connection: sqlite3.Connection) -> None:
+        """Serialize audit-head reads and inserts for the current tenant."""
+        connection.execute("BEGIN IMMEDIATE")
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -519,6 +544,10 @@ class PostgresDatabase:
                 "ALTER TABLE connectors ADD COLUMN IF NOT EXISTS grant_required INTEGER NOT NULL DEFAULT 0",
                 "ALTER TABLE policy_bundles ADD COLUMN IF NOT EXISTS layer TEXT NOT NULL DEFAULT 'platform'",
                 "ALTER TABLE policy_bundles ADD COLUMN IF NOT EXISTS target_id TEXT NOT NULL DEFAULT '*'",
+                "ALTER TABLE oauth_providers ADD COLUMN IF NOT EXISTS identity_url TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE oauth_providers ADD COLUMN IF NOT EXISTS identity_id_field TEXT NOT NULL DEFAULT 'id'",
+                "ALTER TABLE oauth_providers ADD COLUMN IF NOT EXISTS identity_label_field TEXT NOT NULL DEFAULT 'name'",
+                "ALTER TABLE oauth_providers ADD COLUMN IF NOT EXISTS scope_separator TEXT NOT NULL DEFAULT ' '",
             ):
                 connection.execute(statement)
             # Public verification keys are shared infrastructure metadata. They
@@ -594,6 +623,13 @@ class PostgresDatabase:
     def execute(self, sql: str, parameters: tuple = ()) -> None:
         with self.connect() as connection:
             connection.execute(sql, parameters)
+
+    def acquire_audit_lock(self, connection: _PostgresConnection) -> None:
+        """Use a transaction-scoped lock so concurrent writers cannot fork the chain."""
+        connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(?))",
+            (f"warden:audit:{self.current_tenant()}",),
+        )
 
     @contextmanager
     def tenant_scope(self, tenant_id: str):

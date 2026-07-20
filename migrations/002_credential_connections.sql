@@ -11,10 +11,18 @@ CREATE TABLE IF NOT EXISTS oauth_providers (
   provider_id TEXT PRIMARY KEY, client_id TEXT NOT NULL,
   client_secret_alias TEXT NOT NULL, authorization_url TEXT NOT NULL,
   token_url TEXT NOT NULL, api_base_url TEXT NOT NULL,
+  identity_url TEXT NOT NULL DEFAULT '',
+  identity_id_field TEXT NOT NULL DEFAULT 'id',
+  identity_label_field TEXT NOT NULL DEFAULT 'name',
+  scope_separator TEXT NOT NULL DEFAULT ' ',
   default_scopes TEXT NOT NULL, status TEXT NOT NULL, owner TEXT NOT NULL,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
   tenant_id TEXT NOT NULL DEFAULT COALESCE(NULLIF(current_setting('app.tenant_id', true), ''), 'system')
 );
+ALTER TABLE oauth_providers ADD COLUMN IF NOT EXISTS identity_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE oauth_providers ADD COLUMN IF NOT EXISTS identity_id_field TEXT NOT NULL DEFAULT 'id';
+ALTER TABLE oauth_providers ADD COLUMN IF NOT EXISTS identity_label_field TEXT NOT NULL DEFAULT 'name';
+ALTER TABLE oauth_providers ADD COLUMN IF NOT EXISTS scope_separator TEXT NOT NULL DEFAULT ' ';
 CREATE TABLE IF NOT EXISTS credential_connections (
   connection_id TEXT PRIMARY KEY, provider_id TEXT NOT NULL,
   owner_principal_id TEXT NOT NULL, account_identifier TEXT NOT NULL,

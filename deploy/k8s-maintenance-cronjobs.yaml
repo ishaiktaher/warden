@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: warden-reconcile
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: warden-control-plane
+          automountServiceAccountToken: false
+          securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+          containers:
+            - name: reconcile
+              image: ghcr.io/ishaiktaher/warden@sha256:replace-with-reviewed-digest
+              command: ["python", "-m", "scripts.maintenance", "reconcile"]
+              envFrom:
+                - configMapRef: {name: warden-config}
+                - secretRef: {name: warden-runtime}
+              securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: warden-audit-anchor
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          serviceAccountName: warden-control-plane
+          automountServiceAccountToken: false
+          securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+          containers:
+            - name: anchor
+              image: ghcr.io/ishaiktaher/warden@sha256:replace-with-reviewed-digest
+              command: ["python", "-m", "scripts.maintenance", "anchor"]
+              envFrom:
+                - configMapRef: {name: warden-config}
+                - secretRef: {name: warden-runtime}
+              securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}

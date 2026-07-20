@@ -255,6 +255,7 @@ resource "aws_ecs_task_definition" "warden" {
     portMappings=[{containerPort=8000,protocol="tcp"}],
     environment=[
       {name="CONTROL_PLANE_ENV",value="prod"},{name="AWS_REGION",value=var.aws_region},
+      {name="WARDEN_PUBLIC_URL",value=var.public_url},
       {name="WARDEN_SIGNING_PROVIDER",value="aws_kms"},
       {name="WARDEN_SECRETS_PROVIDER",value="aws_secrets_manager"},
       {name="WARDEN_AUDIT_PROVIDER",value="aws_s3"},

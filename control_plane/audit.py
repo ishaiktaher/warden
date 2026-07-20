@@ -76,7 +76,7 @@ class AuditLedger:
             "payload": redact(payload or {}),
         }
         with self.database.connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
+            self.database.acquire_audit_lock(connection)
             previous = connection.execute(
                 "SELECT event_hash FROM audit_events ORDER BY sequence DESC LIMIT 1"
             ).fetchone()

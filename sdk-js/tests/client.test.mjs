@@ -56,6 +56,22 @@ test("grant metadata endpoints encode identifiers and never require credentials"
   ]);
 });
 
+test("integration catalog filters are encoded by the SDK", async () => {
+  let requested;
+  const client = new WardenClient({
+    baseUrl: "https://warden.example.com",
+    fetch: async (url) => {
+      requested = url;
+      return jsonResponse([]);
+    },
+  });
+  await client.listIntegrations({ kind: "oauth2", query: "Google Workspace" });
+  assert.equal(
+    requested,
+    "https://warden.example.com/integrations?kind=oauth2&query=Google+Workspace",
+  );
+});
+
 test("structured HTTP failures become WardenError without exposing authorization", async () => {
   const client = new WardenClient({
     baseUrl: "https://warden.example.com",

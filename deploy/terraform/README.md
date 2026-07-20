@@ -18,6 +18,8 @@ providers or native plugins. See `docs/PROVIDERS.md`.
 Supply an existing VPC with public ALB subnets, private application/data
 subnets, an ACM certificate, an immutable container image digest, and the OIDC
 issuer/audience. Run `terraform plan` in a staging account before apply. The
+required `public_url` input is the canonical HTTPS URL exposed by your DNS and
+certificate configuration.
 private subnets require NAT or VPC endpoints for ECR, CloudWatch, KMS, Secrets
 Manager, S3, and approved connector traffic.
 

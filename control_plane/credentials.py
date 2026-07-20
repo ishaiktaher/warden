@@ -68,37 +68,69 @@ class CredentialService:
             except Exception as exc:
                 raise RuntimeError("Production credential refresh locking is unavailable") from exc
 
-    def register_github_provider(
-        self, *, client_id: str, client_secret_alias: str,
-        default_scopes: list[str], owner: str,
+    def register_oauth_provider(
+        self, *, provider_id: str, client_id: str, client_secret_alias: str,
+        authorization_url: str, token_url: str, api_base_url: str,
+        identity_url: str, identity_id_field: str, identity_label_field: str,
+        scope_separator: str, default_scopes: list[str], owner: str,
     ) -> dict[str, Any]:
         secret = self.database.one(
             "SELECT status FROM secret_aliases WHERE alias=?",
             (self.database.namespace(client_secret_alias),),
         )
         if not secret or secret["status"] != "active":
-            raise CredentialError("GitHub client secret alias is unavailable")
+            raise CredentialError("OAuth client secret alias is unavailable")
+        for value in (authorization_url, token_url, api_base_url, identity_url):
+            parsed = urlparse(value)
+            if parsed.scheme != "https" or not parsed.netloc or parsed.username:
+                raise CredentialError("OAuth provider URLs must be absolute HTTPS URLs")
+            host = (parsed.hostname or "").lower().rstrip(".")
+            if self.settings.production and host not in self.settings.allowed_egress_hosts:
+                raise CredentialError("OAuth provider host is not in the egress allowlist")
+        if scope_separator not in {" ", ","}:
+            raise CredentialError("OAuth scope separator is invalid")
         now = _iso()
-        provider_key = self.database.namespace("github")
+        provider_key = self.database.namespace(provider_id)
         self.database.execute(
             """INSERT INTO oauth_providers(
             provider_id,client_id,client_secret_alias,authorization_url,token_url,
-            api_base_url,default_scopes,status,owner,created_at,updated_at
-            ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+            api_base_url,identity_url,identity_id_field,identity_label_field,
+            scope_separator,default_scopes,status,owner,created_at,updated_at
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(provider_id) DO UPDATE SET client_id=excluded.client_id,
             client_secret_alias=excluded.client_secret_alias,
-            default_scopes=excluded.default_scopes,status='active',owner=excluded.owner,
+            authorization_url=excluded.authorization_url,token_url=excluded.token_url,
+            api_base_url=excluded.api_base_url,identity_url=excluded.identity_url,
+            identity_id_field=excluded.identity_id_field,
+            identity_label_field=excluded.identity_label_field,
+            scope_separator=excluded.scope_separator,default_scopes=excluded.default_scopes,
+            status='active',owner=excluded.owner,
             updated_at=excluded.updated_at""",
-            (provider_key, client_id, client_secret_alias,
-             "https://github.com/login/oauth/authorize",
-             "https://github.com/login/oauth/access_token",
-             "https://api.github.com", _json(sorted(set(default_scopes))),
+            (provider_key, client_id, client_secret_alias, authorization_url, token_url,
+             api_base_url, identity_url, identity_id_field, identity_label_field,
+             scope_separator, _json(sorted(set(default_scopes))),
              "active", owner, now, now),
         )
         self.audit.append("oauth_provider.configured", owner, payload={
-            "provider_id": "github", "default_scopes": sorted(set(default_scopes)),
+            "provider_id": provider_id, "default_scopes": sorted(set(default_scopes)),
         })
-        return self.provider("github")
+        return self.provider(provider_id)
+
+    def register_github_provider(
+        self, *, client_id: str, client_secret_alias: str,
+        default_scopes: list[str], owner: str,
+    ) -> dict[str, Any]:
+        return self.register_oauth_provider(
+            provider_id="github", client_id=client_id,
+            client_secret_alias=client_secret_alias,
+            authorization_url="https://github.com/login/oauth/authorize",
+            # This is a public endpoint URL, not a hardcoded credential.
+            token_url="https://github.com/login/oauth/access_token",  # nosec B106
+            api_base_url="https://api.github.com",
+            identity_url="https://api.github.com/user", identity_id_field="id",
+            identity_label_field="login", scope_separator=" ",
+            default_scopes=default_scopes, owner=owner,
+        )
 
     def provider(self, provider_id: str) -> dict[str, Any]:
         provider_key = self.database.namespace(provider_id)
@@ -113,19 +145,19 @@ class CredentialService:
         result.pop("client_secret_alias", None)
         return result
 
-    def start_github_connect(
-        self, *, principal_id: str, agent_id: str | None, label: str,
+    def start_oauth_connect(
+        self, *, provider_id: str, principal_id: str, agent_id: str | None, label: str,
         provider_scopes: list[str], grant_scopes: list[str],
         allowed_methods: list[str], path_patterns: list[str],
         ttl_seconds: int | None, reason: str,
     ) -> dict[str, Any]:
-        provider_key = self.database.namespace("github")
+        provider_key = self.database.namespace(provider_id)
         provider = self.database.one(
             "SELECT * FROM oauth_providers WHERE provider_id=? AND status='active'",
             (provider_key,),
         )
         if not provider:
-            raise CredentialError("GitHub OAuth provider is not configured")
+            raise CredentialError("OAuth provider is not configured")
         if agent_id:
             agent = self.database.one(
                 "SELECT status,allowed_actions FROM agents WHERE agent_id=?", (agent_id,)
@@ -144,7 +176,7 @@ class CredentialService:
             raise CredentialError("At least one Warden grant scope is required")
         raw_state = secrets.token_urlsafe(32)
         state_hash = hashlib.sha256(raw_state.encode()).hexdigest()
-        redirect_uri = f"{self.settings.public_url}/oauth/github/callback"
+        redirect_uri = f"{self.settings.public_url}/oauth/{provider_id}/callback"
         now = _now()
         grant_expires_at = (
             now + timedelta(seconds=ttl_seconds) if ttl_seconds else None
@@ -163,31 +195,41 @@ class CredentialService:
         )
         query = urlencode({
             "client_id": provider["client_id"], "redirect_uri": redirect_uri,
-            "scope": " ".join(sorted(requested_provider_scopes)), "state": raw_state,
+            "scope": provider["scope_separator"].join(sorted(requested_provider_scopes)),
+            "state": raw_state,
         })
         self.audit.append(
             "oauth.connect_started", principal_id, principal_id=principal_id,
             agent_id=agent_id, payload={
-                "provider_id": "github", "grant_scopes": sorted(set(grant_scopes)),
+                "provider_id": provider_id, "grant_scopes": sorted(set(grant_scopes)),
                 "provider_scopes": sorted(requested_provider_scopes), "label": label,
             },
         )
         return {
-            "provider_id": "github",
+            "provider_id": provider_id,
             "connect_url": f"{provider['authorization_url']}?{query}",
             "expires_at": _iso(now + timedelta(minutes=10)),
         }
 
-    def complete_github_connect(self, *, code: str, state: str) -> dict[str, Any]:
+    def start_github_connect(self, **kwargs: Any) -> dict[str, Any]:
+        return self.start_oauth_connect(provider_id="github", **kwargs)
+
+    def complete_oauth_connect(
+        self, *, provider_id: str, code: str, state: str,
+    ) -> dict[str, Any]:
         state_row = self._consume_state(state)
+        expected_key = self.database.namespace(provider_id)
+        if state_row["provider_id"] != expected_key:
+            self._fail_state(state_row["state_hash"])
+            raise CredentialError("OAuth callback provider does not match state")
         provider = self.database.one(
             "SELECT * FROM oauth_providers WHERE provider_id=? AND status='active'",
             (state_row["provider_id"],),
         )
         if not provider:
-            raise CredentialError("GitHub OAuth provider is unavailable")
+            raise CredentialError("OAuth provider is unavailable")
         client_secret = self.secrets.resolve_for_connector(
-            provider["client_secret_alias"], connector_id="oauth-github",
+            provider["client_secret_alias"], connector_id=f"oauth-{provider_id}",
             run_id="oauth-connect", task_id="oauth-connect", tool_call_id=str(uuid4()),
         )
         try:
@@ -205,26 +247,27 @@ class CredentialService:
             token_response.raise_for_status()
             token = token_response.json()
             if not isinstance(token, dict) or not isinstance(token.get("access_token"), str):
-                raise CredentialError("GitHub token exchange omitted an access token")
+                raise CredentialError("OAuth token exchange omitted an access token")
             identity_response = requests.get(
-                provider["api_base_url"].rstrip("/") + "/user",
+                provider["identity_url"],
                 headers={
-                    "Accept": "application/vnd.github+json",
+                    "Accept": "application/json",
                     "Authorization": f"Bearer {token['access_token']}",
-                    "X-GitHub-Api-Version": "2022-11-28",
                 },
                 timeout=15, allow_redirects=False,
             )
             identity_response.raise_for_status()
             identity = identity_response.json()
-            if not isinstance(identity, dict) or not identity.get("id") or not identity.get("login"):
-                raise CredentialError("GitHub identity response is invalid")
+            identity_id = self._nested(identity, provider["identity_id_field"])
+            identity_label = self._nested(identity, provider["identity_label_field"])
+            if not isinstance(identity, dict) or identity_id is None or identity_label is None:
+                raise CredentialError("OAuth identity response is invalid")
         except CredentialError:
             self._fail_state(state_row["state_hash"])
             raise
         except (requests.RequestException, ValueError) as exc:
             self._fail_state(state_row["state_hash"])
-            raise CredentialError("GitHub OAuth exchange failed") from exc
+            raise CredentialError("OAuth exchange failed") from exc
 
         now = _now()
         access_expires = self._expiry(now, token.get("expires_in"))
@@ -238,21 +281,21 @@ class CredentialService:
         }
         connection_id = str(uuid4())
         credential_alias = f"connections/{connection_id}"
-        self.secrets.store(credential_alias, _json(credential), "oauth-github")
+        self.secrets.store(credential_alias, _json(credential), f"oauth-{provider_id}")
         self.database.execute(
             """INSERT INTO credential_connections(
             connection_id,provider_id,owner_principal_id,account_identifier,
             credential_alias,credential_kind,granted_scopes,access_expires_at,
             refresh_expires_at,status,metadata,created_at,updated_at,last_used_at
             ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)""",
-            (connection_id, state_row["provider_id"], state_row["principal_id"], str(identity["login"]),
+            (connection_id, state_row["provider_id"], state_row["principal_id"], str(identity_label),
              credential_alias, "oauth", _json(sorted({
                  scope.strip() for scope in token.get("scope", "").split(",")
                  if scope.strip()
              })),
              _iso(access_expires) if access_expires else None,
              _iso(refresh_expires) if refresh_expires else None, "active",
-             _json({"provider_user_id": str(identity["id"]), "login": identity["login"]}),
+             _json({"provider_user_id": str(identity_id), "label": str(identity_label)}),
              _iso(now), _iso(now)),
         )
         grant = self._create_grant(
@@ -272,8 +315,8 @@ class CredentialService:
             "oauth.connected", state_row["principal_id"],
             principal_id=state_row["principal_id"], agent_id=state_row["agent_id"],
             payload={
-                "provider_id": "github", "connection_id": connection_id,
-                "grant_id": grant["grant_id"], "account_identifier": identity["login"],
+                "provider_id": provider_id, "connection_id": connection_id,
+                "grant_id": grant["grant_id"], "account_identifier": str(identity_label),
             },
         )
         self.database.execute(
@@ -282,6 +325,9 @@ class CredentialService:
         )
         return {"status": "connected", "connection": self.connection(connection_id),
                 "grant": grant}
+
+    def complete_github_connect(self, *, code: str, state: str) -> dict[str, Any]:
+        return self.complete_oauth_connect(provider_id="github", code=code, state=state)
 
     def create_managed_connection(
         self, *, provider_id: str, owner_principal_id: str,
@@ -649,10 +695,7 @@ class CredentialService:
                 "SELECT * FROM oauth_providers WHERE provider_id=? AND status='active'",
                 (grant["provider_id"],),
             )
-            if not provider or not (
-                provider["provider_id"] == "github"
-                or str(provider["provider_id"]).endswith("::github")
-            ):
+            if not provider:
                 raise CredentialError("OAuth refresh provider is unavailable")
             client_secret = self.secrets.resolve_for_connector(
                 provider["client_secret_alias"], connector_id="oauth-refresh",
@@ -745,6 +788,15 @@ class CredentialService:
         if any(not pattern.startswith("/") or ".." in pattern for pattern in normalized):
             raise CredentialError("Grant endpoint path pattern is invalid")
         return normalized
+
+    @staticmethod
+    def _nested(value: Any, field: str) -> Any:
+        current = value
+        for part in field.split("."):
+            if not isinstance(current, dict) or part not in current:
+                return None
+            current = current[part]
+        return current
 
     @staticmethod
     def _expiry(now: datetime, seconds: Any) -> datetime | None:

@@ -48,6 +48,7 @@ class Settings:
     provider_namespace: str | None = None
     provider_library: str | None = None
     provider_token_label: str | None = None
+    max_request_bytes: int = 1_048_576
 
     @property
     def production(self) -> bool:
@@ -141,4 +142,7 @@ def load_settings() -> Settings:
         provider_namespace=os.getenv("WARDEN_PROVIDER_NAMESPACE", "").strip() or None,
         provider_library=os.getenv("WARDEN_PROVIDER_LIBRARY", "").strip() or None,
         provider_token_label=os.getenv("WARDEN_PROVIDER_TOKEN_LABEL", "").strip() or None,
+        max_request_bytes=max(
+            16_384, int(os.getenv("WARDEN_MAX_REQUEST_BYTES", "1048576"))
+        ),
     )

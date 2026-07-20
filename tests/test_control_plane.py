@@ -70,6 +70,21 @@ class ControlPlaneTests(unittest.TestCase):
         self.assertEqual("executed", updated["status"])
         self.assertEqual(9, read["result"]["value"]["quantity"])
 
+    def test_stale_execution_claims_are_marked_uncertain(self) -> None:
+        self.plane.database.execute(
+            "INSERT INTO execution_requests VALUES(?,?,?,?,?,?,?)",
+            ("stale-jti", "stale-key", "hash", "processing", None,
+             "2000-01-01T00:00:00+00:00", "2000-01-01T00:00:00+00:00"),
+        )
+        result = self.plane.reconcile_stale_operations("test-admin", 60)
+        row = self.plane.database.one(
+            "SELECT status,response_json FROM execution_requests WHERE token_jti=?",
+            ("stale-jti",),
+        )
+        self.assertEqual(1, result["executions_marked_uncertain"])
+        self.assertEqual("uncertain", row["status"])
+        self.assertNotIn("secret", row["response_json"])
+
     def test_owner_credentials_and_pending_manifests(self) -> None:
         owner = self.plane.create_owner("inventory-team", "Inventory Team", ["agent-owner"], "admin")
         self.assertEqual("inventory-team", self.plane.authenticate_owner("inventory-team", owner["api_key"]))

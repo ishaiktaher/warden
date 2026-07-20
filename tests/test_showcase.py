@@ -3,10 +3,25 @@
 from __future__ import annotations
 
 import unittest
+from html.parser import HTMLParser
 
 from fastapi.testclient import TestClient
 
 from api.index import app
+
+
+class _DocumentationLinks(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.hrefs: list[str] = []
+        self.ids: set[str] = set()
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        if values.get("id"):
+            self.ids.add(str(values["id"]))
+        if tag == "a" and values.get("href") is not None:
+            self.hrefs.append(str(values["href"]))
 
 
 class ShowcaseTests(unittest.TestCase):
@@ -14,7 +29,7 @@ class ShowcaseTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def test_public_pages_and_health_are_available(self) -> None:
-        for path in ("/", "/documentation", "/openapi.html", "/showcase.js"):
+        for path in ("/", "/console", "/documentation", "/openapi.html", "/showcase.js"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200, path)
             self.assertEqual(response.headers["x-frame-options"], "DENY")
@@ -38,6 +53,18 @@ class ShowcaseTests(unittest.TestCase):
         health = self.client.get("/health")
         self.assertEqual(health.status_code, 200)
         self.assertEqual(health.json()["mode"], "read-only")
+
+    def test_documentation_has_no_empty_or_broken_internal_links(self) -> None:
+        response = self.client.get("/documentation")
+        parser = _DocumentationLinks()
+        parser.feed(response.text)
+        self.assertTrue(parser.hrefs)
+        self.assertNotIn("", parser.hrefs)
+        for href in parser.hrefs:
+            if href.startswith("#"):
+                self.assertIn(href[1:], parser.ids, href)
+            elif href.startswith("/"):
+                self.assertEqual(200, self.client.get(href).status_code, href)
 
     def test_control_plane_endpoints_are_not_mounted(self) -> None:
         for method, path in (

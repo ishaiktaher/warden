@@ -48,6 +48,21 @@ revocation. If GitHub returns an expiring user access token and refresh token,
 Warden refreshes it shortly before expiry. Production refreshes use a Redis
 distributed lock to prevent concurrent rotation races.
 
+## Provider-neutral OAuth and integration catalog
+
+`GET /integrations` returns the versioned Warden catalog. For any OAuth entry,
+store its client secret and register the provider at
+`POST /admin/oauth/providers/{provider_id}` with its authorization, token, API
+base and identity URLs, identity ID/label fields, scope separator and maximum
+scope set. Start consent at `POST /connect/{provider_id}/start`; the callback is
+`/oauth/{provider_id}/callback`. Production requires every provider hostname in
+`CONTROL_PLANE_ALLOWED_EGRESS_HOSTS` and rejects non-HTTPS configuration.
+
+The catalog is data-driven: all OAuth entries use the same state, custody,
+grant, refresh, revocation and audit controls. Managed-secret entries use the
+injection modes below. Custom providers use the same APIs, so adding a vendor
+does not require changing the enforcement core.
+
 ## Managed credentials
 
 Administrators can onboard API keys, basic credentials, multi-header

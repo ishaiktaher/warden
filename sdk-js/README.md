@@ -16,6 +16,8 @@ const warden = new WardenClient({
   accessToken: process.env.WARDEN_RUNTIME_TOKEN,
 });
 
+const providers = await warden.listIntegrations({ query: "slack" });
+
 const result = await warden.execute({
   capability_token: capability,
   runtime_proof: runtimeProof,

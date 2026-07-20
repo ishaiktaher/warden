@@ -51,7 +51,9 @@ flowchart LR
 - HTTPS-only external connectors with redirect, private-address, content-type
   and response-size defenses
 - Encrypted secret aliases resolved only during connector execution
-- GitHub OAuth connections plus generic managed credentials, independently
+- A versioned catalog of 104 integration modes (66 OAuth and 38 managed-secret)
+  plus custom OAuth and arbitrary credential-injection templates
+- Provider-neutral OAuth connections plus generic managed credentials, independently
   revocable grants, explicit agent delegation, method/path restrictions and
   refresh-token rotation under a distributed production lock
 - Bearer, custom-header, multi-header, basic, query-key and AWS SigV4 credential
@@ -80,6 +82,11 @@ storage are all configured.
 
 Integration documentation is served at `http://127.0.0.1:8000/documentation`
 and the generated API reference at `http://127.0.0.1:8000/docs`.
+
+Browse the machine-readable catalog at `GET /integrations`, filter it with
+`kind=oauth2|managed_secret` and `query=...`, or call `listIntegrations()` from
+`@vouchins/warden`. Catalog coverage means each entry can use the common secure
+OAuth or managed-secret path; it does not duplicate vendor SDKs inside Warden.
 
 The Vercel entrypoint is a separate read-only showcase. It cannot instantiate
 the control plane or mount management/action endpoints. Deploy the real gateway
