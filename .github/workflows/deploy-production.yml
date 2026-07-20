@@ -31,6 +31,37 @@ jobs:
             echo "image_digest must contain exactly 64 lowercase hexadecimal characters" >&2
             exit 1
           }
+      - name: Validate production environment configuration
+        env:
+          KUBE_CONFIG_BASE64: ${{ secrets.KUBE_CONFIG_BASE64 }}
+          SIGNING_PROVIDER: ${{ vars.WARDEN_SIGNING_PROVIDER }}
+          SECRETS_PROVIDER: ${{ vars.WARDEN_SECRETS_PROVIDER }}
+          AUDIT_PROVIDER: ${{ vars.WARDEN_AUDIT_PROVIDER }}
+          EGRESS_HOSTS: ${{ vars.CONTROL_PLANE_ALLOWED_EGRESS_HOSTS }}
+          ALLOWED_ORIGINS: ${{ vars.WARDEN_ALLOWED_ORIGINS }}
+        run: |
+          missing=()
+          [[ -n "$KUBE_CONFIG_BASE64" ]] || missing+=(KUBE_CONFIG_BASE64)
+          [[ -n "$SIGNING_PROVIDER" ]] || missing+=(WARDEN_SIGNING_PROVIDER)
+          [[ -n "$SECRETS_PROVIDER" ]] || missing+=(WARDEN_SECRETS_PROVIDER)
+          [[ -n "$AUDIT_PROVIDER" ]] || missing+=(WARDEN_AUDIT_PROVIDER)
+          [[ -n "$EGRESS_HOSTS" ]] || missing+=(CONTROL_PLANE_ALLOWED_EGRESS_HOSTS)
+          [[ -n "$ALLOWED_ORIGINS" ]] || missing+=(WARDEN_ALLOWED_ORIGINS)
+          if (( ${#missing[@]} )); then
+            printf 'Missing production environment setting: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+          if [[ "$ALLOWED_ORIGINS" == *'*'* ]]; then
+            echo "WARDEN_ALLOWED_ORIGINS cannot contain a wildcard" >&2
+            exit 1
+          fi
+          IFS=',' read -ra origins <<< "$ALLOWED_ORIGINS"
+          for origin in "${origins[@]}"; do
+            [[ "$origin" =~ ^https://[^/[:space:]]+(:[0-9]+)?$ ]] || {
+              echo "Every WARDEN_ALLOWED_ORIGINS entry must be an HTTPS origin" >&2
+              exit 1
+            }
+          done
       - name: Configure Kubernetes access
         env:
           KUBE_CONFIG_BASE64: ${{ secrets.KUBE_CONFIG_BASE64 }}
@@ -39,6 +70,40 @@ jobs:
           printf '%s' "$KUBE_CONFIG_BASE64" | base64 --decode > "$HOME/.kube/config"
           chmod 0600 "$HOME/.kube/config"
           kubectl version --client
+      - name: Verify production cluster prerequisites
+        run: |
+          kubectl apply -f deploy/production/namespace.yaml
+          missing=()
+          for secret in warden-runtime warden-migration-runtime warden-vouchins-tls; do
+            kubectl -n warden get secret "$secret" >/dev/null 2>&1 || missing+=("$secret")
+          done
+          if (( ${#missing[@]} )); then
+            printf 'Missing Kubernetes Secret in namespace warden: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+          runtime_keys=(
+            DATABASE_URL REDIS_URL CONTROL_PLANE_ADMIN_KEY
+            WARDEN_OIDC_ISSUER WARDEN_OIDC_AUDIENCE
+          )
+          for key in "${runtime_keys[@]}"; do
+            kubectl -n warden get secret warden-runtime -o json |
+              jq -e --arg key "$key" '.data[$key] | length > 0' >/dev/null || {
+                echo "warden-runtime is missing required key: $key" >&2
+                exit 1
+              }
+          done
+          kubectl -n warden get secret warden-migration-runtime -o json |
+            jq -e '.data.DATABASE_URL | length > 0' >/dev/null || {
+              echo "warden-migration-runtime is missing required key: DATABASE_URL" >&2
+              exit 1
+            }
+          for key in tls.crt tls.key; do
+            kubectl -n warden get secret warden-vouchins-tls -o json |
+              jq -e --arg key "$key" '.data[$key] | length > 0' >/dev/null || {
+                echo "warden-vouchins-tls is missing required key: $key" >&2
+                exit 1
+              }
+          done
       - name: Apply reviewed release manifests
         env:
           IMAGE_DIGEST: ${{ inputs.image_digest }}
