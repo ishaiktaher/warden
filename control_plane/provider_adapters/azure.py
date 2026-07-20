@@ -46,7 +46,9 @@ class AzureKeyVaultSigningProvider:
             from azure.keyvault.keys import KeyClient
             from azure.keyvault.keys.crypto import CryptographyClient
         except ImportError as exc:
-            raise ProviderError("Install requirements-azure.txt for azure_key_vault") from exc
+            raise ProviderError(
+                "Install requirements/providers/azure.txt for azure_key_vault"
+            ) from exc
         vault_url, key_name, key_version = _key_parts(settings.signing_key_id)
         credential = DefaultAzureCredential()
         self.key_client = KeyClient(vault_url=vault_url, credential=credential)
@@ -98,7 +100,9 @@ class AzureKeyVaultSecretsProvider:
             from azure.identity import DefaultAzureCredential
             from azure.keyvault.secrets import SecretClient
         except ImportError as exc:
-            raise ProviderError("Install requirements-azure.txt for azure_key_vault") from exc
+            raise ProviderError(
+                "Install requirements/providers/azure.txt for azure_key_vault"
+            ) from exc
         self.vault_url = settings.secrets_provider_url.rstrip("/")
         self.client = SecretClient(
             vault_url=self.vault_url, credential=DefaultAzureCredential()
@@ -155,7 +159,9 @@ class AzureBlobAuditProvider:
             from azure.identity import DefaultAzureCredential
             from azure.storage.blob import BlobServiceClient
         except ImportError as exc:
-            raise ProviderError("Install requirements-azure.txt for azure_blob") from exc
+            raise ProviderError(
+                "Install requirements/providers/azure.txt for azure_blob"
+            ) from exc
         service = BlobServiceClient(
             account_url=settings.audit_provider_url,
             credential=DefaultAzureCredential(),

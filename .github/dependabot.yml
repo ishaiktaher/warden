@@ -6,6 +6,18 @@ updates:
     groups:
       python-runtime:
         patterns: ["*"]
+  - package-ecosystem: pip
+    directory: /requirements
+    schedule: {interval: weekly}
+    groups:
+      python-development:
+        patterns: ["*"]
+  - package-ecosystem: pip
+    directory: /requirements/providers
+    schedule: {interval: weekly}
+    groups:
+      python-provider-packs:
+        patterns: ["*"]
   - package-ecosystem: npm
     directory: /sdk-js
     schedule: {interval: weekly}

@@ -1,2 +1,0 @@
--r requirements.in
-python-pkcs11==0.9.5

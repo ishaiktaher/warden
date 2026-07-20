@@ -146,8 +146,14 @@ of making an HTTP request.
 ## Tests
 
 ```bash
+pip install --require-hashes -r requirements/dev.txt
 python -m unittest discover -s tests -v
 ```
+
+Core dependency inputs and their hash-locked runtime output remain at the
+repository root for standard Python and container tooling. Development and
+optional cloud/HSM provider packs are organized under `requirements/`; see
+`requirements/README.md` before updating a lockfile.
 
 ## Deployment choices
 

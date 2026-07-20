@@ -23,7 +23,9 @@ class Pkcs11SigningProvider:
         try:
             import pkcs11
         except ImportError as exc:
-            raise ProviderError("Install requirements-pkcs11.txt for pkcs11") from exc
+            raise ProviderError(
+                "Install requirements/providers/pkcs11.txt for pkcs11"
+            ) from exc
         self.pkcs11 = pkcs11
         self.token = pkcs11.lib(settings.provider_library).get_token(
             token_label=settings.provider_token_label

@@ -30,7 +30,7 @@ class GcpKmsSigningProvider:
         try:
             from google.cloud import kms
         except ImportError as exc:
-            raise ProviderError("Install requirements-gcp.txt for gcp_kms") from exc
+            raise ProviderError("Install requirements/providers/gcp.txt for gcp_kms") from exc
         self.kms = kms
         self.client = kms.KeyManagementServiceClient()
         self.key_id = settings.signing_key_id
@@ -89,7 +89,9 @@ class GcpSecretsProvider:
         try:
             from google.cloud import secretmanager
         except ImportError as exc:
-            raise ProviderError("Install requirements-gcp.txt for gcp_secret_manager") from exc
+            raise ProviderError(
+                "Install requirements/providers/gcp.txt for gcp_secret_manager"
+            ) from exc
         self.client = secretmanager.SecretManagerServiceClient()
         self.parent = settings.secrets_prefix.rstrip("/")
         if not self.parent.startswith("projects/"):
@@ -144,7 +146,9 @@ class GcpStorageAuditProvider:
         try:
             from google.cloud import storage
         except ImportError as exc:
-            raise ProviderError("Install requirements-gcp.txt for gcp_storage") from exc
+            raise ProviderError(
+                "Install requirements/providers/gcp.txt for gcp_storage"
+            ) from exc
         self.bucket_name = settings.audit_target
         self.bucket = storage.Client().bucket(self.bucket_name)
 

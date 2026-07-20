@@ -330,7 +330,9 @@ class ConnectorDispatcher:
             from botocore.awsrequest import AWSRequest
             from botocore.credentials import Credentials
         except ImportError as exc:
-            raise ConnectorError("AWS SigV4 injection requires requirements-aws.txt") from exc
+            raise ConnectorError(
+                "AWS SigV4 injection requires requirements/providers/aws.txt"
+            ) from exc
         access_key = credential.get("access_key")
         secret_key = credential.get("secret_key")
         if not isinstance(access_key, str) or not isinstance(secret_key, str):

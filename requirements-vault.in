@@ -1,2 +1,0 @@
-# Vault Transit and KV v2 use the official HTTPS API through core requests.
--r requirements.in

@@ -794,7 +794,7 @@ schema.
 cd /path/to/warden
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install --require-hashes -r requirements-dev.txt
+pip install --require-hashes -r requirements/dev.txt
 cp .env.example .env
 uvicorn control_plane.api:app --reload
 ```
@@ -965,4 +965,3 @@ When adding any new agent or connector, ask these questions in order:
 If these questions have explicit answers, the agent is no longer operating on
 vague prompt-based trust. It is operating inside enforceable, inspectable,
 revocable authority—which is the central purpose of Warden.
-

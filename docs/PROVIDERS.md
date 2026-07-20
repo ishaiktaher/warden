@@ -18,15 +18,15 @@ Set `WARDEN_SIGNING_PROVIDER`, `WARDEN_SECRETS_PROVIDER`, and
 
 - `http`: portable HTTPS contract described below.
 - `aws_kms`, `aws_secrets_manager`, `aws_s3`: optional AWS adapters installed by
-  `requirements-aws.txt`.
+  `requirements/providers/aws.txt`.
 - `azure_key_vault` (signing/secrets) and `azure_blob` (audit): optional Azure
-  adapters installed by `requirements-azure.txt`.
+  adapters installed by `requirements/providers/azure.txt`.
 - `gcp_kms`, `gcp_secret_manager`, and `gcp_storage`: optional Google Cloud
-  adapters installed by `requirements-gcp.txt`.
-- `vault_transit` and `vault_kv2`: first-party HashiCorp Vault API adapters;
-  `requirements-vault.txt` documents their core-only dependency set.
+  adapters installed by `requirements/providers/gcp.txt`.
+- `vault_transit` and `vault_kv2`: first-party HashiCorp Vault API adapters that
+  use the core `requests` dependency and require no optional provider pack.
 - `pkcs11`: direct RSA signing through a PKCS#11 module, installed by
-  `requirements-pkcs11.txt`.
+  `requirements/providers/pkcs11.txt`.
 - `package.module:factory`: an operator-supplied native plugin. The factory
   receives `Settings` and returns an object implementing the relevant protocol
   from `control_plane.providers`.

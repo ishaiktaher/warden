@@ -32,9 +32,12 @@ jobs:
       - name: Prepare static documentation
         run: |
           mkdir -p _site
-          sed -e 's|href="index.html"|href="https://warden-tau.vercel.app/"|g' \
+          sed -e 's|href="/"|href="https://warden-tau.vercel.app/"|g' \
+              -e 's|href="/console"|href="https://warden-tau.vercel.app/console"|g' \
+              -e 's|href="/openapi.html"|href="./openapi.html"|g' \
               ui/docs.html > _site/index.html
-          cp ui/openapi.html _site/openapi.html
+          sed -e 's|href="/documentation"|href="./"|g' \
+              ui/openapi.html > _site/openapi.html
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: _site

@@ -4,8 +4,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
 WORKDIR /app
 RUN groupadd --system warden && useradd --system --gid warden --home /app warden
 ARG REQUIREMENTS_FILE=requirements.txt
-COPY requirements*.txt ./
-RUN pip install --no-cache-dir -r "${REQUIREMENTS_FILE}"
+COPY requirements.txt ./
+COPY requirements requirements
+RUN pip install --no-cache-dir -r "${REQUIREMENTS_FILE}" \
+    && rm -rf requirements requirements.txt
 COPY --chown=warden:warden control_plane control_plane
 COPY --chown=warden:warden ui ui
 COPY --chown=warden:warden scripts scripts

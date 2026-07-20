@@ -9,7 +9,7 @@ AWS is not required by Warden core. This module selects the optional `aws_kms`,
 `aws_secrets_manager`, and `aws_s3` provider adapters. Build its image with:
 
 ```bash
-docker build --build-arg REQUIREMENTS_FILE=requirements-aws.txt -t warden .
+docker build --build-arg REQUIREMENTS_FILE=requirements/providers/aws.txt -t warden .
 ```
 
 Other deployments use the core `requirements.txt` and select the portable HTTP
