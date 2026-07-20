@@ -9,6 +9,7 @@ data/
 .coverage
 htmlcov/
 .vercel/
+.terraform/
 node_modules/
 sdk-js/dist/
 sdk-python/build/
