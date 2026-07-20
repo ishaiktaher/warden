@@ -29,7 +29,7 @@ from .integrations import catalog, catalog_summary, get_integration
 ROOT = Path(__file__).resolve().parents[1]
 app = FastAPI(
     title="Warden Agent Control Plane",
-    version="2.0.0",
+    version="0.1.0",
     description="Identity, capability, policy, secret, connector and audit control plane for AI agents.",
 )
 plane = ControlPlane()

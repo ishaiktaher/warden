@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 app = FastAPI(
     title="Warden Public Showcase",
-    version="1.0.0",
+    version="0.1.0",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,

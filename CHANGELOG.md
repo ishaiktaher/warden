@@ -3,12 +3,8 @@
 This project follows Semantic Versioning. Release notes document API, schema,
 policy and SDK compatibility separately.
 
-## 0.2.0 - 2026-07-21
+## Control plane 0.1.0 - Unreleased
 
-- Changed the JavaScript SDK support floor to maintained Node.js 22 and added
-  Node.js 24 verification.
-- Added the publishable `vouchins-warden` Python SDK and `warden` CLI with a
-  PyPI trusted-publishing workflow.
 - Added guided application, agent, connector, grant, policy and first-call
   onboarding to the authenticated control plane.
 - Added a visual monotonic policy builder, embedded OAuth Connect component
@@ -26,12 +22,16 @@ policy and SDK compatibility separately.
   credential-bearing control plane.
 - Upgraded GitHub Pages and checkout actions to Node.js 24 releases.
 
-### Python SDK 0.1.0
+### Independently versioned SDK releases
 
+- Published JavaScript SDK `@vouchins/warden` 0.2.0 with a Node.js 22 support
+  floor and Node.js 24 verification.
+- Published Python SDK `vouchins-warden` 0.1.0 with the `warden` CLI and PyPI
+  trusted-publishing workflow.
 - Corrected the trusted-publishing action reference to use PyPA's published
   Docker release tag and configured the distribution directory explicitly.
 
-## 0.1.0 - 2026-07-15
+## Foundation milestone - 2026-07-15
 
 - Added the vendor-neutral Warden identity and action control plane.
 - Added RS256 capabilities, delegation, approvals and layered policies.
