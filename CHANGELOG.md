@@ -26,6 +26,13 @@ policy and SDK compatibility separately.
   credential-bearing control plane.
 - Upgraded GitHub Pages and checkout actions to Node.js 24 releases.
 
+### Python SDK 0.1.1
+
+- Corrected the trusted-publishing action reference to use PyPA's published
+  Docker release tag and configured the distribution directory explicitly.
+- Version `0.1.0` was never uploaded because its publication workflow failed
+  before contacting PyPI.
+
 ## 0.1.0 - 2026-07-15
 
 - Added the vendor-neutral Warden identity and action control plane.

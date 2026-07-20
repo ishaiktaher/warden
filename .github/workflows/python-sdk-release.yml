@@ -27,4 +27,7 @@ jobs:
         run: |
           VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
           test "${GITHUB_REF_NAME}" = "python-sdk-v${VERSION}"
-      - uses: pypa/gh-action-pypi-publish@106e0b0b7c337fa67ed433972f777c6357f78598 # v1.13.0
+      # PyPA publishes the Docker trampoline under release tags, not commit SHAs.
+      - uses: pypa/gh-action-pypi-publish@v1.13.0
+        with:
+          packages-dir: sdk-python/dist/
