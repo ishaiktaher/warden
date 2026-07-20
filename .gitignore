@@ -11,4 +11,7 @@ htmlcov/
 .vercel/
 node_modules/
 sdk-js/dist/
+sdk-python/build/
+sdk-python/dist/
+sdk-python/src/*.egg-info/
 *.tgz

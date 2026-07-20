@@ -16,6 +16,8 @@ class IntegrationCatalogTests(unittest.TestCase):
         self.assertGreater(summary["managed_secret"], 0)
         self.assertEqual(len(INTEGRATIONS), len({item.integration_id for item in INTEGRATIONS}))
         self.assertTrue(summary["custom_providers_supported"])
+        self.assertEqual(3, summary["contract_tested"])
+        self.assertEqual(0, summary["live_verified"])
 
     def test_overlapping_vendors_keep_oauth_and_managed_modes_separate(self) -> None:
         ids = {item["integration_id"] for item in catalog(query="github")}
@@ -26,6 +28,21 @@ class IntegrationCatalogTests(unittest.TestCase):
         response = client.get("/integrations", params={"kind": "managed_secret", "query": "AWS"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()[0]["integration_id"], "managed:aws")
+
+    def test_catalog_distinguishes_listing_from_verification(self) -> None:
+        verified = {
+            item["integration_id"] for item in catalog()
+            if item["verification"] == "contract_tested"
+        }
+        self.assertEqual(
+            {"oauth:github", "managed:slack", "managed:vouchins-admin-api"},
+            verified,
+        )
+        evidence = [
+            item["evidence"] for item in catalog()
+            if item["verification"] == "contract_tested"
+        ]
+        self.assertTrue(all(evidence))
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ on:
       - "ui/openapi.html"
       - "docs/**"
       - "sdk-js/README.md"
+      - "sdk-python/README.md"
       - ".github/workflows/docs-pages.yml"
   workflow_dispatch:
 

@@ -421,6 +421,16 @@ class ControlPlane:
         return {"policy_id": external_policy_id, "version": version, "status": "active",
                 "layer": layer, "target_id": target_id, "rules": rules}
 
+    def list_policies(self) -> list[dict[str, Any]]:
+        return [
+            self._decode(row, {"rules"})
+            for row in self.database.all(
+                """SELECT policy_id,version,name,layer,target_id,rules,status,owner,
+                created_at,activated_at FROM policy_bundles
+                ORDER BY created_at DESC,version DESC"""
+            )
+        ]
+
     # -- Approvals -------------------------------------------------------
     def resolve_approval(self, approval_id: str, approved: bool, actor: str, reason: str = "") -> dict[str, Any]:
         row = self.database.one("SELECT * FROM approvals WHERE approval_id=?", (approval_id,))

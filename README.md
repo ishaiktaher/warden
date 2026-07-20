@@ -51,8 +51,9 @@ flowchart LR
 - HTTPS-only external connectors with redirect, private-address, content-type
   and response-size defenses
 - Encrypted secret aliases resolved only during connector execution
-- A versioned catalog of 104 integration modes (66 OAuth and 38 managed-secret)
-  plus custom OAuth and arbitrary credential-injection templates
+- A versioned integration catalog with evidence labels that distinguish
+  catalog compatibility, contract-tested adapters and live provider verification
+  rather than treating catalog entries as completed integrations
 - Provider-neutral OAuth connections plus generic managed credentials, independently
   revocable grants, explicit agent delegation, method/path restrictions and
   refresh-token rotation under a distributed production lock
@@ -83,10 +84,11 @@ storage are all configured.
 Integration documentation is served at `http://127.0.0.1:8000/documentation`
 and the generated API reference at `http://127.0.0.1:8000/docs`.
 
-Browse the machine-readable catalog at `GET /integrations`, filter it with
-`kind=oauth2|managed_secret` and `query=...`, or call `listIntegrations()` from
-`@vouchins/warden`. Catalog coverage means each entry can use the common secure
-OAuth or managed-secret path; it does not duplicate vendor SDKs inside Warden.
+Browse the machine-readable catalog at `GET /integrations`, its evidence summary
+at `GET /integrations/summary`, or call `listIntegrations()` from
+`@vouchins/warden`. Each entry reports its verification level and evidence.
+Catalog compatibility means an entry can use the common secure OAuth or
+managed-secret path; it is never presented as proof of a live provider call.
 
 The Vercel entrypoint is a separate read-only showcase. It cannot instantiate
 the control plane or mount management/action endpoints. Deploy the real gateway
@@ -113,6 +115,20 @@ that exactly matches the package version, such as `sdk-v0.2.0`, is published
 through npm trusted publishing with provenance after its version and test gates
 pass.
 
+## Python SDK and CLI
+
+The publishable `vouchins-warden` package lives in `sdk-python/`. It is
+dependency-free at runtime and installs the `warden` CLI:
+
+```bash
+cd sdk-python
+PYTHONPATH=src python -m unittest discover -s tests -v
+python -m build
+```
+
+Publishing uses PyPI trusted publishing on a matching `python-sdk-vX.Y.Z` tag.
+See [`sdk-python/README.md`](sdk-python/README.md).
+
 ## Run the architecture use case
 
 ```bash
@@ -122,6 +138,19 @@ python -m scripts.run_support_ticket
 The example creates approved Support Triage and Code Reviewer agents, runtime
 and task identities, scoped parent/child capabilities, approval-gated CRM and
 Jira writes, an email draft, a read-only code review and a verified audit chain.
+
+## Run the Vouchins blog agent
+
+```bash
+python -m scripts.run_blog_agent
+```
+
+This first-party reference agent drafts a Vouchins article and asks Warden to
+execute the exact `blog.publish_post` action for one authorized CMS resource.
+The default connector is a side-effect-free local emulator. A credential-grant-
+backed WordPress-compatible connector is included for production integration;
+production publishing remains approval-gated. See the
+[blog agent guide](docs/BLOG_AGENT.md).
 
 ## Plug in any agent
 

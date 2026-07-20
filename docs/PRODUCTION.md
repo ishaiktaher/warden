@@ -98,6 +98,10 @@ placeholder with a reviewed digest and supply `warden-runtime` from an external
 secret controller. If a selected cloud workload-identity provider requires a
 projected service-account token, enable it narrowly for that service account.
 
+For the concrete `warden.vouchins.com` TLS ingress and manually approved,
+immutable-digest rollout workflow, follow
+[`WARDEN_VOUCHINS_DEPLOYMENT.md`](WARDEN_VOUCHINS_DEPLOYMENT.md).
+
 Vercel can host the documentation or a development showcase. It should not be
 treated as the durable production control plane unless every required stateful
 dependency and custody provider is external and the deployment has passed the

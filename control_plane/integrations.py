@@ -12,7 +12,15 @@ from dataclasses import asdict, dataclass
 import re
 
 
-CATALOG_VERSION = "2026-07-20"
+CATALOG_VERSION = "2026-07-21"
+
+_VERIFIED: dict[str, tuple[str, str | None]] = {
+    "oauth:github": ("contract_tested", "tests/test_credentials.py"),
+    "managed:slack": ("contract_tested", "tests/test_reference_integrations.py"),
+    "managed:vouchins-admin-api": (
+        "contract_tested", "tests/test_reference_integrations.py",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -24,6 +32,9 @@ class Integration:
     docs_url: str
     credential_modes: tuple[str, ...]
     status: str = "supported"
+    verification: str = "catalog_only"
+    verified_at: str | None = None
+    evidence: str | None = None
 
     def public(self) -> dict:
         result = asdict(self)
@@ -56,31 +67,43 @@ _MANAGED_NAMES = (
     "Cloudflare", "Coda", "Cursor", "Datadog", "Discord", "Exa", "Firecrawl",
     "GitHub", "GitLab", "Grafana", "Granola", "Incident.io", "Klaviyo", "PagerDuty",
     "PostHog", "Recharge", "Resend", "Rootly", "SendGrid", "Sentry", "Shopify",
-    "Shortcut", "Stripe", "Supabase", "Tavily", "Terraform", "Twilio", "Vercel",
-    "WhatsApp Business", "WorkOS",
+    "Shortcut", "Slack", "Stripe", "Supabase", "Tavily", "Terraform", "Twilio", "Vercel",
+    "WhatsApp Business", "WorkOS", "Vouchins Admin API",
 )
 
 
 def _oauth(name: str) -> Integration:
     slug = _slug(name)
+    verification, evidence = _VERIFIED.get(
+        f"oauth:{slug}", ("catalog_only", None)
+    )
     return Integration(
         integration_id=f"oauth:{slug}", name=name, kind="oauth2",
         setup_mode="oauth_provider_configuration",
-        docs_url="/documentation#connections",
+        docs_url="/documentation#connections-docs",
         credential_modes=("bearer",),
+        verification=verification,
+        verified_at="2026-07-21" if evidence else None,
+        evidence=evidence,
     )
 
 
 def _managed(name: str) -> Integration:
     slug = _slug(name)
+    verification, evidence = _VERIFIED.get(
+        f"managed:{slug}", ("catalog_only", None)
+    )
     modes = ("aws_sigv4",) if name == "AWS" else (
         "bearer", "custom_header", "multi_header", "query", "basic"
     )
     return Integration(
         integration_id=f"managed:{slug}", name=name, kind="managed_secret",
         setup_mode="managed_secret_template",
-        docs_url="/documentation#connections",
+        docs_url="/documentation#connections-docs",
         credential_modes=modes,
+        verification=verification,
+        verified_at="2026-07-21" if evidence else None,
+        evidence=evidence,
     )
 
 
@@ -108,10 +131,18 @@ def get_integration(integration_id: str) -> dict | None:
 def catalog_summary() -> dict:
     oauth = sum(item.kind == "oauth2" for item in INTEGRATIONS)
     managed = sum(item.kind == "managed_secret" for item in INTEGRATIONS)
+    contract_tested = sum(
+        item.verification in {"contract_tested", "live_verified"}
+        for item in INTEGRATIONS
+    )
+    live_verified = sum(item.verification == "live_verified" for item in INTEGRATIONS)
     return {
         "catalog_version": CATALOG_VERSION,
         "total": len(INTEGRATIONS),
         "oauth2": oauth,
         "managed_secret": managed,
+        "contract_tested": contract_tested,
+        "live_verified": live_verified,
+        "catalog_only": len(INTEGRATIONS) - contract_tested,
         "custom_providers_supported": True,
     }

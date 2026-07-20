@@ -46,6 +46,26 @@ trusted publishing and provenance.
 Never reuse or overwrite an existing npm version. If a workflow fails after a
 version has reached the registry, prepare and review a new patch version.
 
+## Python SDK and CLI
+
+The public distribution is `vouchins-warden`; its source lives in
+`sdk-python/` and the installed command is `warden`.
+
+1. Configure a PyPI trusted publisher for repository `ishaiktaher/warden`,
+   workflow `python-sdk-release.yml` and protected environment `pypi`.
+2. Update `sdk-python/pyproject.toml` and `CHANGELOG.md` together.
+3. Run the SDK unit tests, build both distributions and validate them with
+   `twine check`.
+4. Inspect the wheel and source distribution. They must contain only the SDK,
+   typing marker, license and documentation.
+5. Merge the reviewed release and create an exact matching tag such as
+   `python-sdk-v0.2.0`. The workflow checks the tag/version relationship before
+   publishing with PyPI OIDC. No API token is stored in GitHub.
+6. Install the exact published version in a clean Python 3.11 environment and
+   execute `warden health` against a non-production Warden instance.
+
+Never publish from a maintainer workstation and never reuse a released version.
+
 ## Documentation
 
 The documentation is served by the control plane at `/documentation` and is

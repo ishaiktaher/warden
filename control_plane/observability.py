@@ -14,7 +14,7 @@ from .config import Settings
 
 
 LOGGER = logging.getLogger("warden.request")
-UI_SCRIPT_SHA256 = "7D/dROU9TuKP+k5+fnENEKFm540aq38Vt3R5vd6OX8s="
+UI_SCRIPT_SHA256 = "qjgIPU7NkgA1+EEpu8LqhpibGtAF/xvykg0kBvRDul8="
 
 
 class _RequestTooLarge(RuntimeError):

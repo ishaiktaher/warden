@@ -22,6 +22,7 @@ class Settings:
     admin_key: str
     environment: str
     allowed_egress_hosts: tuple[str, ...]
+    allowed_origins: tuple[str, ...] = ()
     public_url: str = "http://127.0.0.1:8000"
     auto_migrate: bool = False
     database_url: str | None = None
@@ -72,6 +73,15 @@ def load_settings() -> Settings:
         for host in os.getenv("CONTROL_PLANE_ALLOWED_EGRESS_HOSTS", "").split(",")
         if host.strip()
     )
+    origins = tuple(
+        origin.strip().rstrip("/")
+        for origin in os.getenv("WARDEN_ALLOWED_ORIGINS", "").split(",")
+        if origin.strip()
+    )
+    if environment == "prod" and any(
+        origin == "*" or not origin.startswith("https://") for origin in origins
+    ):
+        raise RuntimeError("Production WARDEN_ALLOWED_ORIGINS must contain explicit HTTPS origins")
     oidc_issuer = os.getenv("WARDEN_OIDC_ISSUER", "").strip().rstrip("/") or None
     oidc_audience = os.getenv("WARDEN_OIDC_AUDIENCE", "").strip() or None
     database_url = os.getenv("DATABASE_URL", "").strip() or None
@@ -115,6 +125,7 @@ def load_settings() -> Settings:
         admin_key=admin_key,
         environment=environment,
         allowed_egress_hosts=hosts,
+        allowed_origins=origins,
         public_url=public_url,
         auto_migrate=os.getenv("WARDEN_AUTO_MIGRATE", "false").strip().lower()
         in {"1", "true", "yes"},

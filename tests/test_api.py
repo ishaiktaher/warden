@@ -43,8 +43,126 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(200, self.client.get("/index.html").status_code)
         self.assertIn("Warden Control Plane", self.client.get("/console").text)
         self.assertEqual(200, self.client.get("/openapi.html").status_code)
+        for path in (
+            "/onboarding", "/onboarding.js", "/policies", "/policies.js",
+            "/connections", "/connections.js", "/warden-connect.js", "/product.css",
+        ):
+            self.assertEqual(200, self.client.get(path).status_code, path)
         self.assertEqual(401, self.client.get("/admin/agents").status_code)
         self.assertEqual(200, self.client.get("/admin/agents", headers=self.admin).status_code)
+
+    def test_visual_policy_builder_uses_versioned_policy_api(self) -> None:
+        created = self.client.post(
+            "/admin/policies", headers=self.admin,
+            json={
+                "policy_id": "visual-policy", "layer": "agent",
+                "target_id": "agent-a", "rules": {"deny_actions": ["users.delete"]},
+            },
+        )
+        self.assertEqual(200, created.status_code)
+        policies = self.client.get("/admin/policies", headers=self.admin)
+        self.assertEqual(200, policies.status_code)
+        self.assertTrue(any(
+            item["rules"].get("deny_actions") == ["users.delete"]
+            for item in policies.json()
+        ))
+
+    def test_guided_onboarding_reaches_first_protected_call(self) -> None:
+        agent_id = "onboarding-agent"
+        action = "blog.publish_post"
+        resource = "cms://vouchins/blog/first-post"
+        self.client.post(
+            "/admin/owners", headers=self.admin,
+            json={"owner_id": "onboarding-team", "name": "Onboarding Team"},
+        )
+        registered = self.client.post(
+            "/admin/agents", headers=self.admin,
+            json={
+                "agent_id": agent_id, "name": "Onboarding Agent",
+                "owner": "onboarding-team", "purpose": "Publish one bounded post",
+                "model_provider": "owner-supplied", "agent_version": "1.0.0",
+                "environment": "test", "risk_tier": "medium",
+                "allowed_tools": ["cms"], "allowed_actions": [action],
+                "allowed_data_classifications": ["public"],
+                "max_delegation_depth": 0, "approved_parents": [],
+                "approved_children": [],
+            },
+        )
+        self.assertEqual(200, registered.status_code)
+        self.client.post(
+            f"/admin/agents/{agent_id}/approve", headers=self.admin, json={}
+        )
+        connector = self.client.post(
+            "/admin/connectors", headers=self.admin,
+            json={
+                "connector_id": "onboarding-cms", "tool": "cms", "action": action,
+                "adapter_type": "local_emulator", "http_method": "POST",
+                "resource_patterns": ["cms://vouchins/blog/*"],
+                "required_scopes": [action], "owner": "onboarding-team",
+                "risk_tier": "low", "rate_limit_per_minute": 10,
+                "credential_mode": "bearer", "credential_config": {},
+                "grant_required": True,
+            },
+        )
+        self.assertEqual(200, connector.status_code)
+        policy = self.client.post(
+            "/admin/policies", headers=self.admin,
+            json={
+                "policy_id": "onboarding-agent-starter-policy", "layer": "agent",
+                "target_id": agent_id,
+                "rules": {
+                    "approval_for_production_writes": True,
+                    "require_grants_for_external": True,
+                },
+            },
+        )
+        self.assertEqual(200, policy.status_code)
+        connection = self.client.post(
+            "/admin/connections/managed", headers=self.admin,
+            json={
+                "provider_id": "vouchins-admin-api",
+                "owner_principal_id": "onboarding-user",
+                "account_identifier": "onboarding-account",
+                "credential": {"value": "not-a-production-secret"},
+                "principal_type": "agent", "principal_id": agent_id,
+                "label": "first-call", "grant_scopes": [action],
+                "allowed_methods": ["POST"], "path_patterns": ["/*"],
+                "ttl_seconds": 3600, "reason": "Guided onboarding test",
+            },
+        ).json()
+        run = self.client.post(
+            "/runs", json={
+                "principal_id": "onboarding-user", "agent_id": agent_id,
+                "task": "Execute the onboarding test call", "environment": "test",
+            },
+        ).json()
+        task = self.client.post(
+            "/tasks", json={
+                "run_id": run["run_id"], "description": "First protected call",
+            },
+        ).json()
+        capability = self.client.post(
+            "/admin/capabilities/issue", headers=self.admin,
+            json={
+                "run_id": run["run_id"], "scopes": [action],
+                "resources": [resource], "ttl_seconds": 300,
+            },
+        ).json()
+        executed = self.client.post(
+            "/actions/execute",
+            json={
+                "capability_token": capability["capability_token"],
+                "runtime_proof": run["runtime_proof"],
+                "request_nonce": str(uuid4()), "task_id": task["task_id"],
+                "connector_id": "onboarding-cms", "action": action,
+                "resource": resource, "parameters": {"title": "First post"},
+                "data_classification": "public", "environment": "test",
+                "grant_id": connection["grant"]["grant_id"],
+                "risk_signals": {"onboarding": True},
+            },
+        )
+        self.assertEqual(200, executed.status_code, executed.text)
+        self.assertEqual("executed", executed.json()["status"], executed.text)
 
     def test_owner_can_submit_but_not_self_approve(self) -> None:
         created = self.client.post("/admin/owners", headers=self.admin, json={"owner_id": "team-a", "name": "Team A", "roles": ["agent-owner"]}).json()

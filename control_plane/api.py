@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from html import escape
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 
 from .crypto import CapabilityError
@@ -33,6 +35,15 @@ app = FastAPI(
 plane = ControlPlane()
 authenticator = OIDCAuthenticator(plane.settings)
 configure_observability(app, plane.settings)
+if plane.settings.allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(plane.settings.allowed_origins),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        expose_headers=["X-Request-ID"],
+    )
 
 
 @app.middleware("http")
@@ -40,6 +51,8 @@ async def production_identity_scope(request: Request, call_next):
     public_path = request.url.path in {
         "/", "/index.html", "/console", "/console.html", "/health", "/live", "/ready", "/documentation",
         "/docs.html", "/openapi.html", "/docs", "/openapi.json",
+        "/onboarding", "/onboarding.js", "/policies", "/policies.js",
+        "/connections", "/connections.js", "/warden-connect.js", "/product.css",
         "/.well-known/warden-keys", "/integrations", "/integrations/summary",
     } or (request.url.path.startswith("/integrations/") and request.method == "GET")
     oauth_callback = (
@@ -136,6 +149,46 @@ def dashboard_alias() -> FileResponse:
 @app.get("/console.html", include_in_schema=False)
 def management_console() -> FileResponse:
     return dashboard()
+
+
+@app.get("/onboarding", include_in_schema=False)
+def onboarding() -> FileResponse:
+    return FileResponse(ROOT / "ui" / "onboarding.html")
+
+
+@app.get("/onboarding.js", include_in_schema=False)
+def onboarding_script() -> FileResponse:
+    return FileResponse(ROOT / "ui" / "onboarding.js", media_type="text/javascript")
+
+
+@app.get("/policies", include_in_schema=False)
+def policy_builder() -> FileResponse:
+    return FileResponse(ROOT / "ui" / "policies.html")
+
+
+@app.get("/policies.js", include_in_schema=False)
+def policy_builder_script() -> FileResponse:
+    return FileResponse(ROOT / "ui" / "policies.js", media_type="text/javascript")
+
+
+@app.get("/connections", include_in_schema=False)
+def connection_wallet() -> FileResponse:
+    return FileResponse(ROOT / "ui" / "connections.html")
+
+
+@app.get("/connections.js", include_in_schema=False)
+def connection_wallet_script() -> FileResponse:
+    return FileResponse(ROOT / "ui" / "connections.js", media_type="text/javascript")
+
+
+@app.get("/warden-connect.js", include_in_schema=False)
+def connect_component_script() -> FileResponse:
+    return FileResponse(ROOT / "ui" / "warden-connect.js", media_type="text/javascript")
+
+
+@app.get("/product.css", include_in_schema=False)
+def product_styles() -> FileResponse:
+    return FileResponse(ROOT / "ui" / "product.css", media_type="text/css")
 
 
 @app.get("/documentation", include_in_schema=False)
@@ -365,6 +418,11 @@ def create_policy(request: PolicyCreate, actor: Annotated[str, Depends(admin_act
     ))
 
 
+@app.get("/admin/policies")
+def policies(_: Annotated[str, Depends(admin_actor)]) -> list[dict]:
+    return plane.list_policies()
+
+
 @app.post("/admin/oauth/providers/github")
 def configure_github(
     request: OAuthProviderCreate, actor: Annotated[str, Depends(admin_actor)]
@@ -439,24 +497,42 @@ def start_oauth_connect(provider_id: str, request: Request, body: ConnectStart) 
     ))
 
 
-@app.get("/oauth/github/callback")
-def github_callback(code: str, state: str) -> dict:
+def _oauth_result(request: Request, result: dict) -> dict | HTMLResponse:
+    if "text/html" not in request.headers.get("accept", ""):
+        return result
+    provider = escape(str(result["connection"]["provider_id"]))
+    account = escape(str(result["connection"]["account_identifier"]))
+    page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Connection complete</title><style>body{{font:16px system-ui;background:#07111f;
+    color:#edf5ff;display:grid;place-items:center;min-height:100vh;margin:0}}main{{max-width:520px;
+    padding:32px;border:1px solid #27405d;border-radius:16px;background:#0d1b2d}}a{{color:#64a8ff}}</style>
+    </head><body><main><h1>Connection complete</h1><p>{provider} account
+    <strong>{account}</strong> is now held by Warden.</p><p>You can close this window or
+    <a href="/connections">manage connections</a>.</p></main></body></html>"""
+    return HTMLResponse(page)
+
+
+@app.get("/oauth/github/callback", response_model=None)
+def github_callback(request: Request, code: str, state: str) -> dict | HTMLResponse:
     def complete() -> dict:
         tenant = plane.credentials.oauth_state_tenant(state)
         with plane.database.tenant_scope(tenant):
             return plane.credentials.complete_github_connect(code=code, state=state)
-    return guarded(complete)
+    return _oauth_result(request, guarded(complete))
 
 
-@app.get("/oauth/{provider_id}/callback")
-def oauth_callback(provider_id: str, code: str, state: str) -> dict:
+@app.get("/oauth/{provider_id}/callback", response_model=None)
+def oauth_callback(
+    request: Request, provider_id: str, code: str, state: str,
+) -> dict | HTMLResponse:
     def complete() -> dict:
         tenant = plane.credentials.oauth_state_tenant(state)
         with plane.database.tenant_scope(tenant):
             return plane.credentials.complete_oauth_connect(
                 provider_id=provider_id, code=code, state=state
             )
-    return guarded(complete)
+    return _oauth_result(request, guarded(complete))
 
 
 def _connection_principal(request: Request, principal_id: str | None) -> str:

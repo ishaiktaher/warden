@@ -93,4 +93,19 @@
       selectScenario(next.dataset.scenario);
     });
   });
+
+  fetch("/proof")
+    .then((response) => {
+      if (!response.ok) throw new Error("proof unavailable");
+      return response.json();
+    })
+    .then((proof) => {
+      document.querySelectorAll("[data-proof-tests]").forEach((node) => {
+        node.textContent = `${proof.test_cases} discovered tests`;
+      });
+      document.querySelectorAll("[data-proof-integrations]").forEach((node) => {
+        node.textContent = `${proof.contract_tested_integrations} contract-tested integrations`;
+      });
+    })
+    .catch(() => {});
 })();

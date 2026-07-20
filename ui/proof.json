@@ -1,0 +1,8 @@
+{
+  "catalog_entries": 106,
+  "contract_tested_integrations": 3,
+  "live_verified_integrations": 0,
+  "schema_version": 1,
+  "source": "repository-test-discovery",
+  "test_cases": 66
+}
