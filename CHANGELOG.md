@@ -3,7 +3,7 @@
 This project follows Semantic Versioning. Release notes document API, schema,
 policy and SDK compatibility separately.
 
-## 0.2.0 - Unreleased
+## 0.2.0 - 2026-07-21
 
 - Changed the JavaScript SDK support floor to maintained Node.js 22 and added
   Node.js 24 verification.
