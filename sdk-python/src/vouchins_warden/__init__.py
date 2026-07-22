@@ -1,6 +1,50 @@
 """Public Python SDK for Warden."""
 
-from .client import WardenClient, WardenError
+from .client import (
+    Agent,
+    App,
+    Approval,
+    ApprovalRequiredError,
+    AuditLog,
+    ConflictError,
+    ExpiredSessionError,
+    ForbiddenError,
+    Grant,
+    InvalidKeyError,
+    InvalidRequestError,
+    InvalidScopeError,
+    Key,
+    NotFoundError,
+    PolicyDeniedError,
+    ProviderError,
+    RevokedError,
+    UnauthorizedError,
+    UnavailableError,
+    WardenClient,
+    WardenError,
+)
 
-__all__ = ["WardenClient", "WardenError"]
+__all__ = [
+    "Agent",
+    "App",
+    "Approval",
+    "ApprovalRequiredError",
+    "AuditLog",
+    "ConflictError",
+    "ExpiredSessionError",
+    "ForbiddenError",
+    "Grant",
+    "InvalidKeyError",
+    "InvalidRequestError",
+    "InvalidScopeError",
+    "Key",
+    "NotFoundError",
+    "PolicyDeniedError",
+    "ProviderError",
+    "RevokedError",
+    "UnauthorizedError",
+    "UnavailableError",
+    "WardenClient",
+    "WardenError",
+]
 __version__ = "0.1.0"

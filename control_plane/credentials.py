@@ -48,31 +48,49 @@ class CredentialService:
     _locks: dict[str, threading.Lock] = {}
 
     def __init__(
-        self, database: Any, secrets_broker: SecretsBroker,
-        audit: AuditLedger, settings: Settings,
+        self,
+        database: Any,
+        secrets_broker: SecretsBroker,
+        audit: AuditLedger,
+        settings: Settings,
     ) -> None:
         self.database = database
         self.secrets = secrets_broker
         self.audit = audit
         self.settings = settings
+        self.http: Any = requests
         self.redis = None
         if settings.production:
             try:
                 import redis
 
                 self.redis = redis.Redis.from_url(
-                    cast(str, settings.redis_url), socket_connect_timeout=3,
-                    socket_timeout=3, decode_responses=True,
+                    cast(str, settings.redis_url),
+                    socket_connect_timeout=3,
+                    socket_timeout=3,
+                    decode_responses=True,
                 )
                 self.redis.ping()
             except Exception as exc:
-                raise RuntimeError("Production credential refresh locking is unavailable") from exc
+                raise RuntimeError(
+                    "Production credential refresh locking is unavailable"
+                ) from exc
 
     def register_oauth_provider(
-        self, *, provider_id: str, client_id: str, client_secret_alias: str,
-        authorization_url: str, token_url: str, api_base_url: str,
-        identity_url: str, identity_id_field: str, identity_label_field: str,
-        scope_separator: str, default_scopes: list[str], owner: str,
+        self,
+        *,
+        provider_id: str,
+        client_id: str,
+        client_secret_alias: str,
+        authorization_url: str,
+        token_url: str,
+        api_base_url: str,
+        identity_url: str,
+        identity_id_field: str,
+        identity_label_field: str,
+        scope_separator: str,
+        default_scopes: list[str],
+        owner: str,
     ) -> dict[str, Any]:
         secret = self.database.one(
             "SELECT status FROM secret_aliases WHERE alias=?",
@@ -82,11 +100,26 @@ class CredentialService:
             raise CredentialError("OAuth client secret alias is unavailable")
         for value in (authorization_url, token_url, api_base_url, identity_url):
             parsed = urlparse(value)
-            if parsed.scheme != "https" or not parsed.netloc or parsed.username:
+            synthetic_local = (
+                not self.settings.production
+                and getattr(self.http, "synthetic", False)
+                and parsed.scheme == "http"
+                and parsed.hostname in {"localhost", "127.0.0.1"}
+            )
+            if (
+                (parsed.scheme != "https" and not synthetic_local)
+                or not parsed.netloc
+                or parsed.username
+            ):
                 raise CredentialError("OAuth provider URLs must be absolute HTTPS URLs")
             host = (parsed.hostname or "").lower().rstrip(".")
-            if self.settings.production and host not in self.settings.allowed_egress_hosts:
-                raise CredentialError("OAuth provider host is not in the egress allowlist")
+            if (
+                self.settings.production
+                and host not in self.settings.allowed_egress_hosts
+            ):
+                raise CredentialError(
+                    "OAuth provider host is not in the egress allowlist"
+                )
         if scope_separator not in {" ", ","}:
             raise CredentialError("OAuth scope separator is invalid")
         now = _iso()
@@ -106,30 +139,56 @@ class CredentialService:
             scope_separator=excluded.scope_separator,default_scopes=excluded.default_scopes,
             status='active',owner=excluded.owner,
             updated_at=excluded.updated_at""",
-            (provider_key, client_id, client_secret_alias, authorization_url, token_url,
-             api_base_url, identity_url, identity_id_field, identity_label_field,
-             scope_separator, _json(sorted(set(default_scopes))),
-             "active", owner, now, now),
+            (
+                provider_key,
+                client_id,
+                client_secret_alias,
+                authorization_url,
+                token_url,
+                api_base_url,
+                identity_url,
+                identity_id_field,
+                identity_label_field,
+                scope_separator,
+                _json(sorted(set(default_scopes))),
+                "active",
+                owner,
+                now,
+                now,
+            ),
         )
-        self.audit.append("oauth_provider.configured", owner, payload={
-            "provider_id": provider_id, "default_scopes": sorted(set(default_scopes)),
-        })
+        self.audit.append(
+            "oauth_provider.configured",
+            owner,
+            payload={
+                "provider_id": provider_id,
+                "default_scopes": sorted(set(default_scopes)),
+            },
+        )
         return self.provider(provider_id)
 
     def register_github_provider(
-        self, *, client_id: str, client_secret_alias: str,
-        default_scopes: list[str], owner: str,
+        self,
+        *,
+        client_id: str,
+        client_secret_alias: str,
+        default_scopes: list[str],
+        owner: str,
     ) -> dict[str, Any]:
         return self.register_oauth_provider(
-            provider_id="github", client_id=client_id,
+            provider_id="github",
+            client_id=client_id,
             client_secret_alias=client_secret_alias,
             authorization_url="https://github.com/login/oauth/authorize",
             # This is a public endpoint URL, not a hardcoded credential.
             token_url="https://github.com/login/oauth/access_token",  # nosec B106
             api_base_url="https://api.github.com",
-            identity_url="https://api.github.com/user", identity_id_field="id",
-            identity_label_field="login", scope_separator=" ",
-            default_scopes=default_scopes, owner=owner,
+            identity_url="https://api.github.com/user",
+            identity_id_field="id",
+            identity_label_field="login",
+            scope_separator=" ",
+            default_scopes=default_scopes,
+            owner=owner,
         )
 
     def provider(self, provider_id: str) -> dict[str, Any]:
@@ -146,10 +205,18 @@ class CredentialService:
         return result
 
     def start_oauth_connect(
-        self, *, provider_id: str, principal_id: str, agent_id: str | None, label: str,
-        provider_scopes: list[str], grant_scopes: list[str],
-        allowed_methods: list[str], path_patterns: list[str],
-        ttl_seconds: int | None, reason: str,
+        self,
+        *,
+        provider_id: str,
+        principal_id: str,
+        agent_id: str | None,
+        label: str,
+        provider_scopes: list[str],
+        grant_scopes: list[str],
+        allowed_methods: list[str],
+        path_patterns: list[str],
+        ttl_seconds: int | None,
+        reason: str,
     ) -> dict[str, Any]:
         provider_key = self.database.namespace(provider_id)
         provider = self.database.one(
@@ -160,16 +227,23 @@ class CredentialService:
             raise CredentialError("OAuth provider is not configured")
         if agent_id:
             agent = self.database.one(
-                "SELECT status,allowed_actions FROM agents WHERE agent_id=?", (agent_id,)
+                "SELECT status,allowed_actions FROM agents WHERE agent_id=?",
+                (agent_id,),
             )
             if not agent or agent["status"] != "active":
                 raise CredentialError("Delegated agent is not active")
-            if not set(grant_scopes).issubset(set(json.loads(agent["allowed_actions"]))):
-                raise CredentialError("Credential grant scopes exceed the agent manifest")
+            if not set(grant_scopes).issubset(
+                set(json.loads(agent["allowed_actions"]))
+            ):
+                raise CredentialError(
+                    "Credential grant scopes exceed the agent manifest"
+                )
         defaults = set(json.loads(provider["default_scopes"]))
         requested_provider_scopes = set(provider_scopes or defaults)
         if not requested_provider_scopes.issubset(defaults):
-            raise CredentialError("Requested OAuth scopes exceed provider configuration")
+            raise CredentialError(
+                "Requested OAuth scopes exceed provider configuration"
+            )
         methods = self._methods(allowed_methods)
         paths = self._paths(path_patterns)
         if not grant_scopes:
@@ -178,31 +252,51 @@ class CredentialService:
         state_hash = hashlib.sha256(raw_state.encode()).hexdigest()
         redirect_uri = f"{self.settings.public_url}/oauth/{provider_id}/callback"
         now = _now()
-        grant_expires_at = (
-            now + timedelta(seconds=ttl_seconds) if ttl_seconds else None
-        )
+        grant_expires_at = now + timedelta(seconds=ttl_seconds) if ttl_seconds else None
         self.database.execute(
             """INSERT INTO oauth_states(
             state_hash,provider_id,principal_id,agent_id,label,provider_scopes,
             grant_scopes,allowed_methods,path_patterns,grant_expires_at,reason,
             redirect_uri,status,created_at,expires_at,consumed_at
             ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)""",
-            (state_hash, provider_key, principal_id, agent_id, label,
-             _json(sorted(requested_provider_scopes)), _json(sorted(set(grant_scopes))),
-             _json(methods), _json(paths), _iso(grant_expires_at) if grant_expires_at else None,
-             reason, redirect_uri, "pending", _iso(now),
-             _iso(now + timedelta(minutes=10))),
+            (
+                state_hash,
+                provider_key,
+                principal_id,
+                agent_id,
+                label,
+                _json(sorted(requested_provider_scopes)),
+                _json(sorted(set(grant_scopes))),
+                _json(methods),
+                _json(paths),
+                _iso(grant_expires_at) if grant_expires_at else None,
+                reason,
+                redirect_uri,
+                "pending",
+                _iso(now),
+                _iso(now + timedelta(minutes=10)),
+            ),
         )
-        query = urlencode({
-            "client_id": provider["client_id"], "redirect_uri": redirect_uri,
-            "scope": provider["scope_separator"].join(sorted(requested_provider_scopes)),
-            "state": raw_state,
-        })
+        query = urlencode(
+            {
+                "client_id": provider["client_id"],
+                "redirect_uri": redirect_uri,
+                "scope": provider["scope_separator"].join(
+                    sorted(requested_provider_scopes)
+                ),
+                "state": raw_state,
+            }
+        )
         self.audit.append(
-            "oauth.connect_started", principal_id, principal_id=principal_id,
-            agent_id=agent_id, payload={
-                "provider_id": provider_id, "grant_scopes": sorted(set(grant_scopes)),
-                "provider_scopes": sorted(requested_provider_scopes), "label": label,
+            "oauth.connect_started",
+            principal_id,
+            principal_id=principal_id,
+            agent_id=agent_id,
+            payload={
+                "provider_id": provider_id,
+                "grant_scopes": sorted(set(grant_scopes)),
+                "provider_scopes": sorted(requested_provider_scopes),
+                "label": label,
             },
         )
         return {
@@ -215,7 +309,11 @@ class CredentialService:
         return self.start_oauth_connect(provider_id="github", **kwargs)
 
     def complete_oauth_connect(
-        self, *, provider_id: str, code: str, state: str,
+        self,
+        *,
+        provider_id: str,
+        code: str,
+        state: str,
     ) -> dict[str, Any]:
         state_row = self._consume_state(state)
         expected_key = self.database.namespace(provider_id)
@@ -229,11 +327,14 @@ class CredentialService:
         if not provider:
             raise CredentialError("OAuth provider is unavailable")
         client_secret = self.secrets.resolve_for_connector(
-            provider["client_secret_alias"], connector_id=f"oauth-{provider_id}",
-            run_id="oauth-connect", task_id="oauth-connect", tool_call_id=str(uuid4()),
+            provider["client_secret_alias"],
+            connector_id=f"oauth-{provider_id}",
+            run_id="oauth-connect",
+            task_id="oauth-connect",
+            tool_call_id=str(uuid4()),
         )
         try:
-            token_response = requests.post(
+            token_response = self.http.post(
                 provider["token_url"],
                 headers={"Accept": "application/json"},
                 data={
@@ -242,25 +343,33 @@ class CredentialService:
                     "code": code,
                     "redirect_uri": state_row["redirect_uri"],
                 },
-                timeout=15, allow_redirects=False,
+                timeout=15,
+                allow_redirects=False,
             )
             token_response.raise_for_status()
             token = token_response.json()
-            if not isinstance(token, dict) or not isinstance(token.get("access_token"), str):
+            if not isinstance(token, dict) or not isinstance(
+                token.get("access_token"), str
+            ):
                 raise CredentialError("OAuth token exchange omitted an access token")
-            identity_response = requests.get(
+            identity_response = self.http.get(
                 provider["identity_url"],
                 headers={
                     "Accept": "application/json",
                     "Authorization": f"Bearer {token['access_token']}",
                 },
-                timeout=15, allow_redirects=False,
+                timeout=15,
+                allow_redirects=False,
             )
             identity_response.raise_for_status()
             identity = identity_response.json()
             identity_id = self._nested(identity, provider["identity_id_field"])
             identity_label = self._nested(identity, provider["identity_label_field"])
-            if not isinstance(identity, dict) or identity_id is None or identity_label is None:
+            if (
+                not isinstance(identity, dict)
+                or identity_id is None
+                or identity_label is None
+            ):
                 raise CredentialError("OAuth identity response is invalid")
         except CredentialError:
             self._fail_state(state_row["state_hash"])
@@ -273,7 +382,8 @@ class CredentialService:
         access_expires = self._expiry(now, token.get("expires_in"))
         refresh_expires = self._expiry(now, token.get("refresh_token_expires_in"))
         credential = {
-            "type": "oauth", "access_token": token["access_token"],
+            "type": "oauth",
+            "access_token": token["access_token"],
             "token_type": token.get("token_type", "bearer"),
             "refresh_token": token.get("refresh_token"),
             "access_expires_at": _iso(access_expires) if access_expires else None,
@@ -288,53 +398,90 @@ class CredentialService:
             credential_alias,credential_kind,granted_scopes,access_expires_at,
             refresh_expires_at,status,metadata,created_at,updated_at,last_used_at
             ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)""",
-            (connection_id, state_row["provider_id"], state_row["principal_id"], str(identity_label),
-             credential_alias, "oauth", _json(sorted({
-                 scope.strip() for scope in token.get("scope", "").split(",")
-                 if scope.strip()
-             })),
-             _iso(access_expires) if access_expires else None,
-             _iso(refresh_expires) if refresh_expires else None, "active",
-             _json({"provider_user_id": str(identity_id), "label": str(identity_label)}),
-             _iso(now), _iso(now)),
+            (
+                connection_id,
+                state_row["provider_id"],
+                state_row["principal_id"],
+                str(identity_label),
+                credential_alias,
+                "oauth",
+                _json(
+                    sorted(
+                        {
+                            scope.strip()
+                            for scope in token.get("scope", "").split(",")
+                            if scope.strip()
+                        }
+                    )
+                ),
+                _iso(access_expires) if access_expires else None,
+                _iso(refresh_expires) if refresh_expires else None,
+                "active",
+                _json(
+                    {"provider_user_id": str(identity_id), "label": str(identity_label)}
+                ),
+                _iso(now),
+                _iso(now),
+            ),
         )
         grant = self._create_grant(
-            connection_id=connection_id, principal_type="user",
-            principal_id=state_row["principal_id"], label=state_row["label"],
+            connection_id=connection_id,
+            principal_type="user",
+            principal_id=state_row["principal_id"],
+            label=state_row["label"],
             scopes=json.loads(state_row["grant_scopes"]),
             allowed_methods=json.loads(state_row["allowed_methods"]),
             path_patterns=json.loads(state_row["path_patterns"]),
-            expires_at=state_row["grant_expires_at"], reason=state_row["reason"],
+            expires_at=state_row["grant_expires_at"],
+            reason=state_row["reason"],
         )
         if state_row["agent_id"]:
             self.delegate_grant(
-                grant["grant_id"], state_row["agent_id"],
-                state_row["principal_id"], state_row["reason"],
+                grant["grant_id"],
+                state_row["agent_id"],
+                state_row["principal_id"],
+                state_row["reason"],
             )
         self.audit.append(
-            "oauth.connected", state_row["principal_id"],
-            principal_id=state_row["principal_id"], agent_id=state_row["agent_id"],
+            "oauth.connected",
+            state_row["principal_id"],
+            principal_id=state_row["principal_id"],
+            agent_id=state_row["agent_id"],
             payload={
-                "provider_id": provider_id, "connection_id": connection_id,
-                "grant_id": grant["grant_id"], "account_identifier": str(identity_label),
+                "provider_id": provider_id,
+                "connection_id": connection_id,
+                "grant_id": grant["grant_id"],
+                "account_identifier": str(identity_label),
             },
         )
         self.database.execute(
             "UPDATE oauth_states SET status='completed' WHERE state_hash=?",
             (state_row["state_hash"],),
         )
-        return {"status": "connected", "connection": self.connection(connection_id),
-                "grant": grant}
+        return {
+            "status": "connected",
+            "connection": self.connection(connection_id),
+            "grant": grant,
+        }
 
     def complete_github_connect(self, *, code: str, state: str) -> dict[str, Any]:
         return self.complete_oauth_connect(provider_id="github", code=code, state=state)
 
     def create_managed_connection(
-        self, *, provider_id: str, owner_principal_id: str,
-        account_identifier: str, credential: dict[str, Any],
-        principal_type: str, principal_id: str, label: str,
-        grant_scopes: list[str], allowed_methods: list[str],
-        path_patterns: list[str], ttl_seconds: int | None, reason: str,
+        self,
+        *,
+        provider_id: str,
+        owner_principal_id: str,
+        account_identifier: str,
+        credential: dict[str, Any],
+        principal_type: str,
+        principal_id: str,
+        label: str,
+        grant_scopes: list[str],
+        allowed_methods: list[str],
+        path_patterns: list[str],
+        ttl_seconds: int | None,
+        reason: str,
         actor: str,
     ) -> dict[str, Any]:
         if not credential or not all(isinstance(key, str) for key in credential):
@@ -349,26 +496,56 @@ class CredentialService:
             credential_alias,credential_kind,granted_scopes,access_expires_at,
             refresh_expires_at,status,metadata,created_at,updated_at,last_used_at
             ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)""",
-            (connection_id, provider_id, owner_principal_id, account_identifier,
-             alias, "managed", _json([]), None, None, "active", _json({}),
-             _iso(now), _iso(now)),
+            (
+                connection_id,
+                provider_id,
+                owner_principal_id,
+                account_identifier,
+                alias,
+                "managed",
+                _json([]),
+                None,
+                None,
+                "active",
+                _json({}),
+                _iso(now),
+                _iso(now),
+            ),
         )
         expires_at = _iso(now + timedelta(seconds=ttl_seconds)) if ttl_seconds else None
         grant = self._create_grant(
-            connection_id=connection_id, principal_type=principal_type,
-            principal_id=principal_id, label=label, scopes=grant_scopes,
+            connection_id=connection_id,
+            principal_type=principal_type,
+            principal_id=principal_id,
+            label=label,
+            scopes=grant_scopes,
             allowed_methods=self._methods(allowed_methods),
-            path_patterns=self._paths(path_patterns), expires_at=expires_at,
+            path_patterns=self._paths(path_patterns),
+            expires_at=expires_at,
             reason=reason,
         )
-        self.audit.append("connection.created", actor, principal_id=owner_principal_id,
-                          payload={"connection_id": connection_id, "provider_id": provider_id,
-                                   "credential_kind": "managed", "grant_id": grant["grant_id"]})
+        self.audit.append(
+            "connection.created",
+            actor,
+            principal_id=owner_principal_id,
+            payload={
+                "connection_id": connection_id,
+                "provider_id": provider_id,
+                "credential_kind": "managed",
+                "grant_id": grant["grant_id"],
+            },
+        )
         return {"connection": self.connection(connection_id), "grant": grant}
 
     def authorize_grant(
-        self, grant_id: str, *, principal_id: str, agent_id: str,
-        action: str, method: str, endpoint: str,
+        self,
+        grant_id: str,
+        *,
+        principal_id: str,
+        agent_id: str,
+        action: str,
+        method: str,
+        endpoint: str,
     ) -> dict[str, Any]:
         row = self.database.one(
             """SELECT g.*,c.provider_id,c.credential_alias,c.credential_kind,
@@ -386,10 +563,14 @@ class CredentialService:
             WHERE grant_id=? AND agent_id=? AND status='active'""",
             (grant_id, agent_id),
         )
-        direct_agent = row["principal_type"] == "agent" and row["principal_id"] == agent_id
+        direct_agent = (
+            row["principal_type"] == "agent" and row["principal_id"] == agent_id
+        )
         principal_matches = row["owner_principal_id"] == principal_id
         if not principal_matches:
-            raise CredentialError("Credential grant owner does not match the capability principal")
+            raise CredentialError(
+                "Credential grant owner does not match the capability principal"
+            )
         if not (delegated or direct_agent):
             raise CredentialError("Credential grant is not delegated to this agent")
         scopes = set(json.loads(row["scopes"]))
@@ -397,26 +578,38 @@ class CredentialService:
             raise CredentialError("Action is outside credential grant scope")
         methods = set(json.loads(row["allowed_methods"]))
         if methods and method.upper() not in methods:
-            raise CredentialError("HTTP method is outside credential grant restrictions")
+            raise CredentialError(
+                "HTTP method is outside credential grant restrictions"
+            )
         path = urlparse(endpoint).path or "/"
         patterns = json.loads(row["path_patterns"])
-        if patterns and not any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns):
-            raise CredentialError("Endpoint path is outside credential grant restrictions")
+        if patterns and not any(
+            fnmatch.fnmatchcase(path, pattern) for pattern in patterns
+        ):
+            raise CredentialError(
+                "Endpoint path is outside credential grant restrictions"
+            )
         result = dict(row)
         for field in ("scopes", "allowed_methods", "path_patterns"):
             result[field] = json.loads(result[field])
         return result
 
     def resolve_credential(
-        self, grant: dict[str, Any], *, run_id: str, task_id: str,
-        tool_call_id: str, connector_id: str,
+        self,
+        grant: dict[str, Any],
+        *,
+        run_id: str,
+        task_id: str,
+        tool_call_id: str,
+        connector_id: str,
     ) -> dict[str, Any]:
         credential = self._read_credential(
             grant["credential_alias"], run_id, task_id, tool_call_id, connector_id
         )
         if grant["credential_kind"] == "oauth":
-            credential = self._refresh_if_needed(grant, credential, run_id, task_id,
-                                                  tool_call_id, connector_id)
+            credential = self._refresh_if_needed(
+                grant, credential, run_id, task_id, tool_call_id, connector_id
+            )
         now = _iso()
         self.database.execute(
             "UPDATE credential_grants SET last_used_at=?,updated_at=? WHERE grant_id=?",
@@ -427,18 +620,29 @@ class CredentialService:
             (now, now, grant["connection_id"]),
         )
         self.audit.append(
-            "credential.exercised", "credential-broker", principal_id=grant["owner_principal_id"],
-            run_id=run_id, task_id=task_id, tool_call_id=tool_call_id,
-            payload={"grant_id": grant["grant_id"], "connection_id": grant["connection_id"],
-                     "provider_id": grant["provider_id"], "connector_id": connector_id},
+            "credential.exercised",
+            "credential-broker",
+            principal_id=grant["owner_principal_id"],
+            run_id=run_id,
+            task_id=task_id,
+            tool_call_id=tool_call_id,
+            payload={
+                "grant_id": grant["grant_id"],
+                "connection_id": grant["connection_id"],
+                "provider_id": grant["provider_id"],
+                "connector_id": connector_id,
+            },
         )
         return credential
 
-    def delegate_grant(self, grant_id: str, agent_id: str, actor: str, reason: str) -> dict[str, Any]:
+    def delegate_grant(
+        self, grant_id: str, agent_id: str, actor: str, reason: str
+    ) -> dict[str, Any]:
         grant = self.database.one(
             """SELECT g.*,c.owner_principal_id FROM credential_grants g
             JOIN credential_connections c ON c.connection_id=g.connection_id
-            WHERE g.grant_id=? AND g.status='active'""", (grant_id,),
+            WHERE g.grant_id=? AND g.status='active'""",
+            (grant_id,),
         )
         agent = self.database.one(
             "SELECT status,allowed_actions FROM agents WHERE agent_id=?", (agent_id,)
@@ -461,8 +665,13 @@ class CredentialService:
             created_by=excluded.created_by,created_at=excluded.created_at,revoked_at=NULL""",
             (delegation_id, grant_id, agent_id, "active", actor, now),
         )
-        self.audit.append("grant.delegated", actor, principal_id=grant["owner_principal_id"],
-                          agent_id=agent_id, payload={"grant_id": grant_id, "reason": reason})
+        self.audit.append(
+            "grant.delegated",
+            actor,
+            principal_id=grant["owner_principal_id"],
+            agent_id=agent_id,
+            payload={"grant_id": grant_id, "reason": reason},
+        )
         row = self.database.one(
             "SELECT * FROM grant_delegations WHERE grant_id=? AND agent_id=?",
             (grant_id, agent_id),
@@ -473,7 +682,8 @@ class CredentialService:
         row = self.database.one(
             """SELECT g.status,c.owner_principal_id FROM credential_grants g
             JOIN credential_connections c ON c.connection_id=g.connection_id
-            WHERE g.grant_id=?""", (grant_id,),
+            WHERE g.grant_id=?""",
+            (grant_id,),
         )
         if not row:
             raise CredentialError("Unknown credential grant")
@@ -487,19 +697,26 @@ class CredentialService:
             "UPDATE grant_delegations SET status='revoked',revoked_at=? WHERE grant_id=?",
             (_iso(), grant_id),
         )
-        self.audit.append("grant.revoked", actor, payload={"grant_id": grant_id, "reason": reason})
+        self.audit.append(
+            "grant.revoked", actor, payload={"grant_id": grant_id, "reason": reason}
+        )
 
     def revoke_connection(self, connection_id: str, actor: str, reason: str) -> None:
         row = self.database.one(
-            "SELECT * FROM credential_connections WHERE connection_id=?", (connection_id,)
+            "SELECT * FROM credential_connections WHERE connection_id=?",
+            (connection_id,),
         )
         if not row:
             raise CredentialError("Unknown credential connection")
         if actor != row["owner_principal_id"] and actor != "control-plane-admin":
-            raise CredentialError("Only the connection owner may revoke this connection")
+            raise CredentialError(
+                "Only the connection owner may revoke this connection"
+            )
         if row["status"] == "revoked":
             return
-        if row["credential_kind"] == "oauth" and str(row["provider_id"]).endswith("github"):
+        if row["credential_kind"] == "oauth" and str(row["provider_id"]).endswith(
+            "github"
+        ):
             self._revoke_github_token(dict(row), actor)
         self.database.execute(
             "UPDATE credential_connections SET status='revoked',updated_at=? WHERE connection_id=?",
@@ -510,8 +727,12 @@ class CredentialService:
             (reason, _iso(), connection_id),
         )
         self.secrets.revoke(row["credential_alias"], actor)
-        self.audit.append("connection.revoked", actor, principal_id=row["owner_principal_id"],
-                          payload={"connection_id": connection_id, "reason": reason})
+        self.audit.append(
+            "connection.revoked",
+            actor,
+            principal_id=row["owner_principal_id"],
+            payload={"connection_id": connection_id, "reason": reason},
+        )
 
     def _revoke_github_token(self, connection: dict[str, Any], actor: str) -> None:
         provider = self.database.one(
@@ -521,15 +742,20 @@ class CredentialService:
         if not provider:
             raise CredentialError("GitHub OAuth provider is unavailable for revocation")
         credential = self._read_credential(
-            connection["credential_alias"], "connection-revoke", "connection-revoke",
-            str(uuid4()), "oauth-github-revoke",
+            connection["credential_alias"],
+            "connection-revoke",
+            "connection-revoke",
+            str(uuid4()),
+            "oauth-github-revoke",
         )
         access_token = credential.get("access_token")
         if not isinstance(access_token, str) or not access_token:
             raise CredentialError("GitHub credential cannot be revoked at the provider")
         client_secret = self.secrets.resolve_for_connector(
-            provider["client_secret_alias"], connector_id="oauth-github-revoke",
-            run_id="connection-revoke", task_id="connection-revoke",
+            provider["client_secret_alias"],
+            connector_id="oauth-github-revoke",
+            run_id="connection-revoke",
+            task_id="connection-revoke",
             tool_call_id=str(uuid4()),
         )
         endpoint = (
@@ -537,7 +763,7 @@ class CredentialService:
             + f"/applications/{provider['client_id']}/token"
         )
         try:
-            response = requests.delete(
+            response = self.http.delete(
                 endpoint,
                 auth=(provider["client_id"], client_secret),
                 headers={
@@ -551,19 +777,24 @@ class CredentialService:
             if response.status_code not in {204, 404}:
                 response.raise_for_status()
         except requests.RequestException as exc:
-            raise CredentialError("GitHub rejected provider-side token revocation") from exc
+            raise CredentialError(
+                "GitHub rejected provider-side token revocation"
+            ) from exc
         self.audit.append(
-            "credential.provider_revoked", actor,
+            "credential.provider_revoked",
+            actor,
             principal_id=connection["owner_principal_id"],
             payload={
                 "connection_id": connection["connection_id"],
-                "provider_id": "github", "provider_status": response.status_code,
+                "provider_id": "github",
+                "provider_status": response.status_code,
             },
         )
 
     def connection(self, connection_id: str) -> dict[str, Any]:
         row = self.database.one(
-            "SELECT * FROM credential_connections WHERE connection_id=?", (connection_id,)
+            "SELECT * FROM credential_connections WHERE connection_id=?",
+            (connection_id,),
         )
         if not row:
             raise CredentialError("Unknown credential connection")
@@ -574,7 +805,9 @@ class CredentialService:
         return result
 
     def grant(self, grant_id: str) -> dict[str, Any]:
-        row = self.database.one("SELECT * FROM credential_grants WHERE grant_id=?", (grant_id,))
+        row = self.database.one(
+            "SELECT * FROM credential_grants WHERE grant_id=?", (grant_id,)
+        )
         if not row:
             raise CredentialError("Unknown credential grant")
         result = dict(row)
@@ -585,7 +818,8 @@ class CredentialService:
     def connections_for(self, principal_id: str) -> list[dict[str, Any]]:
         rows = self.database.all(
             """SELECT connection_id FROM credential_connections
-            WHERE owner_principal_id=? ORDER BY created_at DESC""", (principal_id,),
+            WHERE owner_principal_id=? ORDER BY created_at DESC""",
+            (principal_id,),
         )
         return [self.connection(row["connection_id"]) for row in rows]
 
@@ -593,14 +827,23 @@ class CredentialService:
         rows = self.database.all(
             """SELECT g.grant_id FROM credential_grants g JOIN credential_connections c
             ON c.connection_id=g.connection_id WHERE c.owner_principal_id=?
-            ORDER BY g.created_at DESC""", (principal_id,),
+            ORDER BY g.created_at DESC""",
+            (principal_id,),
         )
         return [self.grant(row["grant_id"]) for row in rows]
 
     def _create_grant(
-        self, *, connection_id: str, principal_type: str, principal_id: str,
-        label: str, scopes: list[str], allowed_methods: list[str],
-        path_patterns: list[str], expires_at: str | None, reason: str,
+        self,
+        *,
+        connection_id: str,
+        principal_type: str,
+        principal_id: str,
+        label: str,
+        scopes: list[str],
+        allowed_methods: list[str],
+        path_patterns: list[str],
+        expires_at: str | None,
+        reason: str,
     ) -> dict[str, Any]:
         if principal_type not in {"user", "group", "system", "agent"}:
             raise CredentialError("Invalid grant principal type")
@@ -615,15 +858,35 @@ class CredentialService:
                 allowed_methods,path_patterns,expires_at,status,reason,created_at,
                 updated_at,last_used_at
                 ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)""",
-                (grant_id, connection_id, principal_type, principal_id, label,
-                 _json(sorted(set(scopes))), _json(self._methods(allowed_methods)),
-                 _json(self._paths(path_patterns)), expires_at, "active", reason, now, now),
+                (
+                    grant_id,
+                    connection_id,
+                    principal_type,
+                    principal_id,
+                    label,
+                    _json(sorted(set(scopes))),
+                    _json(self._methods(allowed_methods)),
+                    _json(self._paths(path_patterns)),
+                    expires_at,
+                    "active",
+                    reason,
+                    now,
+                    now,
+                ),
             )
         except Exception as exc:
             raise CredentialError("Credential grant could not be created") from exc
-        self.audit.append("grant.created", principal_id, principal_id=principal_id,
-                          payload={"grant_id": grant_id, "connection_id": connection_id,
-                                   "scopes": sorted(set(scopes)), "label": label})
+        self.audit.append(
+            "grant.created",
+            principal_id,
+            principal_id=principal_id,
+            payload={
+                "grant_id": grant_id,
+                "connection_id": connection_id,
+                "scopes": sorted(set(scopes)),
+                "label": label,
+            },
+        )
         return self.grant(grant_id)
 
     def _consume_state(self, raw_state: str) -> dict[str, Any]:
@@ -632,7 +895,8 @@ class CredentialService:
             updated = connection.execute(
                 """UPDATE oauth_states SET status='exchanging',consumed_at=?
                 WHERE state_hash=? AND status='pending' AND expires_at>?
-                RETURNING *""", (_iso(), state_hash, _iso()),
+                RETURNING *""",
+                (_iso(), state_hash, _iso()),
             )
             row = updated.fetchone()
             if not row:
@@ -657,13 +921,20 @@ class CredentialService:
         )
 
     def _read_credential(
-        self, alias: str, run_id: str, task_id: str,
-        tool_call_id: str, connector_id: str,
+        self,
+        alias: str,
+        run_id: str,
+        task_id: str,
+        tool_call_id: str,
+        connector_id: str,
     ) -> dict[str, Any]:
         try:
             raw = self.secrets.resolve_for_connector(
-                alias, connector_id=connector_id, run_id=run_id,
-                task_id=task_id, tool_call_id=tool_call_id,
+                alias,
+                connector_id=connector_id,
+                run_id=run_id,
+                task_id=task_id,
+                tool_call_id=tool_call_id,
             )
         except RuntimeError as exc:
             raise CredentialError("Stored credential is unavailable") from exc
@@ -676,11 +947,18 @@ class CredentialService:
         return credential
 
     def _refresh_if_needed(
-        self, grant: dict[str, Any], credential: dict[str, Any],
-        run_id: str, task_id: str, tool_call_id: str, connector_id: str,
+        self,
+        grant: dict[str, Any],
+        credential: dict[str, Any],
+        run_id: str,
+        task_id: str,
+        tool_call_id: str,
+        connector_id: str,
     ) -> dict[str, Any]:
         expiry = credential.get("access_expires_at")
-        if not expiry or datetime.fromisoformat(expiry) > _now() + timedelta(seconds=60):
+        if not expiry or datetime.fromisoformat(expiry) > _now() + timedelta(
+            seconds=60
+        ):
             return credential
         if not credential.get("refresh_token"):
             raise CredentialError("OAuth access token expired and cannot be refreshed")
@@ -689,7 +967,9 @@ class CredentialService:
                 grant["credential_alias"], run_id, task_id, tool_call_id, connector_id
             )
             current_expiry = current.get("access_expires_at")
-            if current_expiry and datetime.fromisoformat(current_expiry) > _now() + timedelta(seconds=60):
+            if current_expiry and datetime.fromisoformat(
+                current_expiry
+            ) > _now() + timedelta(seconds=60):
                 return current
             provider = self.database.one(
                 "SELECT * FROM oauth_providers WHERE provider_id=? AND status='active'",
@@ -698,19 +978,24 @@ class CredentialService:
             if not provider:
                 raise CredentialError("OAuth refresh provider is unavailable")
             client_secret = self.secrets.resolve_for_connector(
-                provider["client_secret_alias"], connector_id="oauth-refresh",
-                run_id=run_id, task_id=task_id, tool_call_id=tool_call_id,
+                provider["client_secret_alias"],
+                connector_id="oauth-refresh",
+                run_id=run_id,
+                task_id=task_id,
+                tool_call_id=tool_call_id,
             )
             try:
-                response = requests.post(
-                    provider["token_url"], headers={"Accept": "application/json"},
+                response = self.http.post(
+                    provider["token_url"],
+                    headers={"Accept": "application/json"},
                     data={
                         "client_id": provider["client_id"],
                         "client_secret": client_secret,
                         "grant_type": "refresh_token",
                         "refresh_token": current["refresh_token"],
                     },
-                    timeout=15, allow_redirects=False,
+                    timeout=15,
+                    allow_redirects=False,
                 )
                 response.raise_for_status()
                 refreshed = response.json()
@@ -728,34 +1013,52 @@ class CredentialService:
             next_credential = {
                 **current,
                 "access_token": refreshed["access_token"],
-                "refresh_token": refreshed.get("refresh_token", current["refresh_token"]),
-                "token_type": refreshed.get("token_type", current.get("token_type", "bearer")),
+                "refresh_token": refreshed.get(
+                    "refresh_token", current["refresh_token"]
+                ),
+                "token_type": refreshed.get(
+                    "token_type", current.get("token_type", "bearer")
+                ),
                 "access_expires_at": (
-                    _iso(access_expires) if access_expires
+                    _iso(access_expires)
+                    if access_expires
                     else current.get("access_expires_at")
                 ),
                 "refresh_expires_at": (
-                    _iso(refresh_expires) if refresh_expires
+                    _iso(refresh_expires)
+                    if refresh_expires
                     else current.get("refresh_expires_at")
                 ),
             }
-            self.secrets.store(grant["credential_alias"], _json(next_credential), "oauth-refresh")
+            self.secrets.store(
+                grant["credential_alias"], _json(next_credential), "oauth-refresh"
+            )
             self.database.execute(
                 """UPDATE credential_connections SET access_expires_at=?,refresh_expires_at=?,
                 updated_at=? WHERE connection_id=?""",
-                (next_credential["access_expires_at"], next_credential["refresh_expires_at"],
-                 _iso(), grant["connection_id"]),
+                (
+                    next_credential["access_expires_at"],
+                    next_credential["refresh_expires_at"],
+                    _iso(),
+                    grant["connection_id"],
+                ),
             )
-            self.audit.append("credential.refreshed", "credential-broker",
-                              payload={"connection_id": grant["connection_id"],
-                                       "provider_id": grant["provider_id"]})
+            self.audit.append(
+                "credential.refreshed",
+                "credential-broker",
+                payload={
+                    "connection_id": grant["connection_id"],
+                    "provider_id": grant["provider_id"],
+                },
+            )
             return next_credential
 
     @contextmanager
     def _refresh_lock(self, connection_id: str) -> Iterator[None]:
         if self.redis:
             lock = self.redis.lock(
-                f"warden:credential-refresh:{connection_id}", timeout=30,
+                f"warden:credential-refresh:{connection_id}",
+                timeout=30,
                 blocking_timeout=5,
             )
             if not lock.acquire(blocking=True):
@@ -785,7 +1088,9 @@ class CredentialService:
     @staticmethod
     def _paths(patterns: list[str]) -> list[str]:
         normalized = sorted(set(patterns or ["/*"]))
-        if any(not pattern.startswith("/") or ".." in pattern for pattern in normalized):
+        if any(
+            not pattern.startswith("/") or ".." in pattern for pattern in normalized
+        ):
             raise CredentialError("Grant endpoint path pattern is invalid")
         return normalized
 

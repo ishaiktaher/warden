@@ -14,7 +14,7 @@ from .config import Settings
 
 
 LOGGER = logging.getLogger("warden.request")
-UI_SCRIPT_SHA256 = "qjgIPU7NkgA1+EEpu8LqhpibGtAF/xvykg0kBvRDul8="
+UI_SCRIPT_SHA256 = "B8Py9Zj3EHgqcJyPm14+KH3esXkXitA10RVqgP7c3Nc="
 
 
 class _RequestTooLarge(RuntimeError):
@@ -68,16 +68,21 @@ class RequestBodyLimitMiddleware:
 
     @staticmethod
     async def _reject(send: Any) -> None:
-        body = b'{"detail":"Request body exceeds the configured limit"}'
-        await send({
-            "type": "http.response.start",
-            "status": 413,
-            "headers": [
-                (b"content-type", b"application/json"),
-                (b"content-length", str(len(body)).encode()),
-                (b"cache-control", b"no-store"),
-            ],
-        })
+        body = (
+            b'{"error":{"code":"invalid_request","detail":"Request body exceeds '
+            b'the configured limit","retryable":false,"request_id":null}}'
+        )
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 413,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode()),
+                    (b"cache-control", b"no-store"),
+                ],
+            }
+        )
         await send({"type": "http.response.body", "body": body})
 
 
@@ -90,7 +95,9 @@ def configure_observability(app: FastAPI, settings: Settings) -> None:
     if settings.otlp_endpoint:
         try:
             from opentelemetry import trace
-            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+                OTLPSpanExporter,
+            )
             from opentelemetry.sdk.resources import Resource
             from opentelemetry.sdk.trace import TracerProvider
             from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -125,10 +132,17 @@ def configure_observability(app: FastAPI, settings: Settings) -> None:
             "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; "
             "form-action 'self'"
         )
-        LOGGER.info(json.dumps({
-            "event": "http.request", "request_id": request_id,
-            "method": request.method, "path": request.url.path,
-            "status_code": response.status_code,
-            "duration_ms": round((time.perf_counter() - started) * 1000, 2),
-        }, sort_keys=True))
+        LOGGER.info(
+            json.dumps(
+                {
+                    "event": "http.request",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                },
+                sort_keys=True,
+            )
+        )
         return response

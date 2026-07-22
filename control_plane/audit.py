@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import re
+import csv
+import io
 from typing import Any, Iterable
 from uuid import uuid4
 
@@ -59,6 +61,7 @@ class AuditLedger:
         run_id: str | None = None,
         task_id: str | None = None,
         tool_call_id: str | None = None,
+        key_id: str | None = None,
         decision: str | None = None,
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -72,6 +75,7 @@ class AuditLedger:
             "run_id": run_id,
             "task_id": task_id,
             "tool_call_id": tool_call_id,
+            "key_id": key_id,
             "decision": decision,
             "payload": redact(payload or {}),
         }
@@ -89,34 +93,67 @@ class AuditLedger:
                 """
                 INSERT INTO audit_events(
                   event_id,timestamp,event_type,actor,principal_id,agent_id,
-                  run_id,task_id,tool_call_id,decision,payload,previous_hash,event_hash
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                  run_id,task_id,tool_call_id,key_id,decision,payload,previous_hash,event_hash
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
-                    event["event_id"], event["timestamp"], event_type, actor,
-                    principal_id, agent_id, run_id, task_id, tool_call_id, decision,
+                    event["event_id"],
+                    event["timestamp"],
+                    event_type,
+                    actor,
+                    principal_id,
+                    agent_id,
+                    run_id,
+                    task_id,
+                    tool_call_id,
+                    key_id,
+                    decision,
                     json.dumps(event["payload"], sort_keys=True, separators=(",", ":")),
-                    previous_hash, event_hash,
+                    previous_hash,
+                    event_hash,
                 ),
             )
         return {**event, "previous_hash": previous_hash, "event_hash": event_hash}
 
     def events(
-        self, *, run_id: str | None = None, principal_id: str | None = None,
-        agent_id: str | None = None, event_type: str | None = None,
-        decision: str | None = None, action: str | None = None,
-        resource: str | None = None, limit: int = 200,
+        self,
+        *,
+        run_id: str | None = None,
+        principal_id: str | None = None,
+        agent_id: str | None = None,
+        event_type: str | None = None,
+        decision: str | None = None,
+        action: str | None = None,
+        resource: str | None = None,
+        limit: int = 200,
+        key_id: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        before_sequence: int | None = None,
     ) -> list[dict[str, Any]]:
         limit = min(max(limit, 1), 5000)
         clauses: list[str] = []
         parameters: list[Any] = []
         for column, value in (
-            ("run_id", run_id), ("principal_id", principal_id), ("agent_id", agent_id),
-            ("event_type", event_type), ("decision", decision),
+            ("run_id", run_id),
+            ("principal_id", principal_id),
+            ("agent_id", agent_id),
+            ("event_type", event_type),
+            ("decision", decision),
+            ("key_id", key_id),
         ):
             if value:
                 clauses.append(f"{column}=?")
                 parameters.append(value)
+        if date_from:
+            clauses.append("timestamp>=?")
+            parameters.append(date_from)
+        if date_to:
+            clauses.append("timestamp<=?")
+            parameters.append(date_to)
+        if before_sequence:
+            clauses.append("sequence<?")
+            parameters.append(before_sequence)
         sql = "SELECT * FROM audit_events"
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
@@ -126,10 +163,63 @@ class AuditLedger:
         rows.reverse()
         events = [self._row(row) for row in rows]
         if action:
-            events = [event for event in events if event["payload"].get("action") == action]
+            events = [
+                event for event in events if event["payload"].get("action") == action
+            ]
         if resource:
-            events = [event for event in events if event["payload"].get("resource") == resource]
+            events = [
+                event
+                for event in events
+                if event["payload"].get("resource") == resource
+            ]
         return events
+
+    def page(self, **filters: Any) -> dict[str, Any]:
+        limit = int(filters.pop("limit", 200))
+        events = self.events(limit=limit + 1, **filters)
+        has_more = len(events) > limit
+        items = events[-limit:] if has_more else events
+        next_cursor = (
+            min(event["sequence"] for event in items) if has_more and items else None
+        )
+        return {
+            "items": items,
+            "next_cursor": str(next_cursor) if next_cursor else None,
+            "has_more": has_more,
+        }
+
+    def export_csv(self, **filters: Any) -> Iterable[str]:
+        output = io.StringIO()
+        fields = [
+            "sequence",
+            "event_id",
+            "timestamp",
+            "event_type",
+            "actor",
+            "principal_id",
+            "agent_id",
+            "key_id",
+            "run_id",
+            "task_id",
+            "tool_call_id",
+            "decision",
+            "payload",
+        ]
+        writer = csv.DictWriter(output, fieldnames=fields)
+        writer.writeheader()
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+        for event in self.events(limit=5000, **filters):
+            writer.writerow(
+                {
+                    **{key: event.get(key) for key in fields},
+                    "payload": json.dumps(event["payload"], sort_keys=True),
+                }
+            )
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
 
     def verify(self) -> dict[str, Any]:
         rows = self.database.all("SELECT * FROM audit_events ORDER BY sequence")
@@ -139,8 +229,18 @@ class AuditLedger:
             unsigned = {
                 key: event[key]
                 for key in (
-                    "event_id", "timestamp", "event_type", "actor", "principal_id",
-                    "agent_id", "run_id", "task_id", "tool_call_id", "decision", "payload",
+                    "event_id",
+                    "timestamp",
+                    "event_type",
+                    "actor",
+                    "principal_id",
+                    "agent_id",
+                    "run_id",
+                    "task_id",
+                    "tool_call_id",
+                    "key_id",
+                    "decision",
+                    "payload",
                 )
             }
             canonical = json.dumps(unsigned, sort_keys=True, separators=(",", ":"))
@@ -166,22 +266,35 @@ class AuditLedger:
         if not self.anchor_provider:
             raise RuntimeError("An audit anchor provider is not configured")
         timestamp = datetime.now(timezone.utc)
-        body = json.dumps({
-            "anchored_at": timestamp.isoformat(), "actor": actor,
-            "events_checked": verification["events_checked"],
-            "head_hash": verification["head_hash"],
-        }, sort_keys=True, separators=(",", ":")).encode()
+        body = json.dumps(
+            {
+                "anchored_at": timestamp.isoformat(),
+                "actor": actor,
+                "events_checked": verification["events_checked"],
+                "head_hash": verification["head_hash"],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
         try:
             receipt = self.anchor_provider.anchor(body, retention_days)
         except Exception as exc:
             raise RuntimeError("Immutable audit anchor delivery failed") from exc
         self.append(
-            "audit.anchored", actor,
-            payload={"provider": self.anchor_provider.name, "receipt": receipt,
-                     "head_hash": verification["head_hash"]},
+            "audit.anchored",
+            actor,
+            payload={
+                "provider": self.anchor_provider.name,
+                "receipt": receipt,
+                "head_hash": verification["head_hash"],
+            },
         )
-        return {"status": "anchored", "provider": self.anchor_provider.name,
-                "receipt": receipt, "head_hash": verification["head_hash"]}
+        return {
+            "status": "anchored",
+            "provider": self.anchor_provider.name,
+            "receipt": receipt,
+            "head_hash": verification["head_hash"],
+        }
 
     @staticmethod
     def _row(row: Any) -> dict[str, Any]:
@@ -196,6 +309,7 @@ class AuditLedger:
             "run_id": row["run_id"],
             "task_id": row["task_id"],
             "tool_call_id": row["tool_call_id"],
+            "key_id": row["key_id"],
             "decision": row["decision"],
             "payload": json.loads(row["payload"]),
             "previous_hash": row["previous_hash"],
