@@ -105,7 +105,7 @@ Status terms:
 |---|---|---|
 | Setting Up an App | Partial | Owners, agents, connectors, policies, and onboarding UI exist. Organization/app creation and a single coherent setup wizard with verification gates do not. |
 | Connecting an Identity Provider | Absent for product parity | Global runtime OIDC is not equivalent to customer-configured per-app Auth0/Clerk/Okta/WorkOS/custom OIDC. Missing discovery, locked claim mappings, sign-in, JIT provisioning, signed webhooks, directory import/reconciliation, stable group IDs, and forced revocation behavior. |
-| API Keys | Partial | Signing-key rotation/revocation exists for Warden capabilities. Missing runtime/agent/derived key types, one-time plaintext display, key hashes/prefixes, per-key scopes, CIDR/rate/expiry constraints, deprecation, grace rotation, cascading derived-key revocation, and usage attribution. |
+| API Keys | Partial | Signing-key rotation/revocation exists for Warden capabilities. Missing runtime/agent/derived key types, one-time plaintext display, key hashes/prefixes, per-key scopes, CIDR restrictions, rate limits, and expiry constraints, deprecation, grace rotation, cascading derived-key revocation, and usage attribution. |
 | Wallet Dashboard | Partial | `/connections` lets a principal inspect and revoke connections/grants. It is not a secure IDP-authenticated wallet with session lifecycle, user-authored policy, call history, branding, and configurable suppression. |
 | Exporting Audit Logs | Partial/unverified | NDJSON export and pluggable immutable anchoring exist. Missing CSV, paginated cursor ingestion, configurable retention/legal holds, and an at-least-once OCSF 1.5 SIEM worker with retry, dedupe, dead-letter state, and resume. |
 

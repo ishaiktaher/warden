@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import time
-from typing import Any, Callable
+from typing import Any, Callable, List
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -447,7 +447,7 @@ class App(_Resource):
             "GET", f"/admin/apps/{quote(app_id, safe='')}/identity", admin=True
         )
 
-    def users(self, app_id: str) -> list[dict[str, Any]]:
+    def users(self, app_id: str) -> List[dict[str, Any]]:
         result = self.client._request(
             "GET", f"/admin/apps/{quote(app_id, safe='')}/users", admin=True
         )
