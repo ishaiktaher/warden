@@ -39,8 +39,8 @@
   },
   "scripts": {
     "clean": "node scripts/clean.mjs",
-    "build": "npm run clean && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/prepare-cjs.mjs",
-    "test": "npm run build && node --test tests/client.test.mjs tests/commonjs.test.cjs",
+    "build": "npm run clean && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/prepare-cjs.mjs && node scripts/sync-browser.mjs",
+    "test": "npm run build && node --test tests/client.test.mjs tests/commonjs.test.cjs tests/portal-components.test.mjs",
     "prepack": "npm test",
     "pack:check": "npm pack --dry-run"
   },

@@ -19,6 +19,14 @@ class UiSecurityTests(unittest.TestCase):
         ).decode()
         self.assertEqual(UI_SCRIPT_SHA256, digest)
 
+    def test_connect_widget_accepts_only_backend_session_context(self) -> None:
+        widget = (Path(__file__).parents[1] / "ui" / "warden-connect.js").read_text()
+        self.assertIn('getAttribute("session-token")', widget)
+        self.assertIn("event.source !== popup", widget)
+        self.assertNotIn("/me/connections", widget)
+        self.assertNotIn('getAttribute("principal-id")', widget)
+        self.assertNotIn('getAttribute("grant-scopes")', widget)
+
 
 if __name__ == "__main__":
     unittest.main()

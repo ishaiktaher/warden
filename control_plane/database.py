@@ -235,6 +235,102 @@ CREATE TABLE IF NOT EXISTS oauth_states (
   consumed_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS connect_sessions (
+  session_id TEXT PRIMARY KEY,
+  token_hash TEXT UNIQUE NOT NULL,
+  principal_id TEXT NOT NULL,
+  agent_id TEXT,
+  allowed_providers TEXT NOT NULL,
+  provider_scopes TEXT NOT NULL,
+  grant_scopes TEXT NOT NULL,
+  allowed_methods TEXT NOT NULL,
+  path_patterns TEXT NOT NULL,
+  label TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  consumed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS api_keys (
+  key_id TEXT PRIMARY KEY,
+  key_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  key_prefix TEXT UNIQUE NOT NULL,
+  key_hash TEXT UNIQUE NOT NULL,
+  scopes TEXT NOT NULL,
+  agent_id TEXT,
+  parent_key_id TEXT REFERENCES api_keys(key_id),
+  cidr_allowlist TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT,
+  deprecated_at TEXT,
+  revoked_at TEXT,
+  last_used_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS apps (
+  app_id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_identity_providers (
+  app_id TEXT PRIMARY KEY REFERENCES apps(app_id),
+  issuer TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  client_secret_alias TEXT NOT NULL,
+  user_id_claim TEXT NOT NULL,
+  email_claim TEXT NOT NULL,
+  groups_claim TEXT NOT NULL,
+  webhook_secret_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_users (
+  user_id TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL REFERENCES apps(app_id),
+  external_subject_id TEXT NOT NULL,
+  email TEXT,
+  groups_json TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(app_id,external_subject_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_sessions (
+  session_id TEXT PRIMARY KEY,
+  token_hash TEXT UNIQUE NOT NULL,
+  app_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES app_users(user_id),
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT,
+  csrf_hash TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_session_tenants (
+  token_hash TEXT PRIMARY KEY,
+  tenant_context TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS browser_oidc_states (
+  state_hash TEXT PRIMARY KEY,
+  app_id TEXT NOT NULL REFERENCES apps(app_id),
+  tenant_context TEXT NOT NULL,
+  verifier_encrypted TEXT NOT NULL,
+  nonce TEXT NOT NULL,
+  redirect_path TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS secret_aliases (
   alias TEXT PRIMARY KEY,
   encrypted_value TEXT NOT NULL,
@@ -294,6 +390,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
   run_id TEXT,
   task_id TEXT,
   tool_call_id TEXT,
+  key_id TEXT,
   decision TEXT,
   payload TEXT NOT NULL,
   previous_hash TEXT NOT NULL,
@@ -305,6 +402,16 @@ CREATE TABLE IF NOT EXISTS action_requests (
   connector_id TEXT NOT NULL,
   token_jti TEXT NOT NULL,
   requested_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS enforcement_trace_records (
+  call_id TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  position REAL NOT NULL,
+  status TEXT NOT NULL,
+  detail TEXT NOT NULL,
+  recorded_at TEXT,
+  PRIMARY KEY(call_id,stage)
 );
 
 CREATE TABLE IF NOT EXISTS request_nonces (
@@ -384,7 +491,9 @@ class Database:
             connection.executescript(SCHEMA)
             columns = {row[1] for row in connection.execute("PRAGMA table_info(runs)")}
             if "runtime_secret_hash" not in columns:
-                connection.execute("ALTER TABLE runs ADD COLUMN runtime_secret_hash TEXT")
+                connection.execute(
+                    "ALTER TABLE runs ADD COLUMN runtime_secret_hash TEXT"
+                )
             connector_columns = {
                 row[1] for row in connection.execute("PRAGMA table_info(connectors)")
             }
@@ -394,9 +503,12 @@ class Database:
                 ("grant_required", "INTEGER NOT NULL DEFAULT 0"),
             ):
                 if name not in connector_columns:
-                    connection.execute(f"ALTER TABLE connectors ADD COLUMN {name} {definition}")
+                    connection.execute(
+                        f"ALTER TABLE connectors ADD COLUMN {name} {definition}"
+                    )
             policy_columns = {
-                row[1] for row in connection.execute("PRAGMA table_info(policy_bundles)")
+                row[1]
+                for row in connection.execute("PRAGMA table_info(policy_bundles)")
             }
             if "layer" not in policy_columns:
                 connection.execute(
@@ -407,7 +519,8 @@ class Database:
                     "ALTER TABLE policy_bundles ADD COLUMN target_id TEXT NOT NULL DEFAULT '*'"
                 )
             oauth_columns = {
-                row[1] for row in connection.execute("PRAGMA table_info(oauth_providers)")
+                row[1]
+                for row in connection.execute("PRAGMA table_info(oauth_providers)")
             }
             for name, definition in (
                 ("identity_url", "TEXT NOT NULL DEFAULT ''"),
@@ -419,6 +532,33 @@ class Database:
                     connection.execute(
                         f"ALTER TABLE oauth_providers ADD COLUMN {name} {definition}"
                     )
+            audit_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(audit_events)")
+            }
+            if "key_id" not in audit_columns:
+                connection.execute("ALTER TABLE audit_events ADD COLUMN key_id TEXT")
+            session_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(user_sessions)")
+            }
+            if "token_hash" not in session_columns:
+                connection.execute(
+                    "ALTER TABLE user_sessions ADD COLUMN token_hash TEXT"
+                )
+                connection.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS user_sessions_token_hash ON user_sessions(token_hash)"
+                )
+            if "csrf_hash" not in session_columns:
+                connection.execute(
+                    "ALTER TABLE user_sessions ADD COLUMN csrf_hash TEXT"
+                )
+            browser_state_columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(browser_oidc_states)")
+            }
+            if "tenant_context" not in browser_state_columns:
+                connection.execute(
+                    "ALTER TABLE browser_oidc_states ADD COLUMN tenant_context TEXT NOT NULL DEFAULT 'default'"
+                )
         # The development database contains private signing material and may
         # contain encrypted connector credentials. Never inherit a permissive
         # process umask for this file.
@@ -493,7 +633,10 @@ class PostgresDatabase:
         self._tenant: ContextVar[str] = ContextVar("warden_tenant", default="system")
         self.pool = ConnectionPool(
             conninfo=database_url.replace("postgresql+psycopg://", "postgresql://"),
-            min_size=1, max_size=20, timeout=10, open=True,
+            min_size=1,
+            max_size=20,
+            timeout=10,
+            open=True,
             kwargs={"row_factory": dict_row},
         )
         self.pool.wait(timeout=10)
@@ -503,10 +646,10 @@ class PostgresDatabase:
             self._verify_schema()
 
     def _initialize(self) -> None:
-        schema = SCHEMA.replace("PRAGMA journal_mode=WAL;", "").replace(
-            "PRAGMA foreign_keys=ON;", ""
-        ).replace(
-            "INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY"
+        schema = (
+            SCHEMA.replace("PRAGMA journal_mode=WAL;", "")
+            .replace("PRAGMA foreign_keys=ON;", "")
+            .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
         )
         with self.connect() as connection:
             connection.execute(
@@ -516,13 +659,42 @@ class PostgresDatabase:
                 if statement.strip():
                     connection.execute(statement)
             tenant_tables = (
-                "agents", "owners", "agent_versions", "runs", "tasks", "tool_calls",
-                "tokens", "delegations", "connectors", "secret_aliases",
-                "oauth_providers", "credential_connections", "credential_grants",
-                "grant_delegations", "oauth_states",
-                "approvals", "policy_bundles", "revocations", "audit_events",
-                "action_requests", "request_nonces", "execution_requests", "settings",
-                "crm_cases", "email_drafts", "jira_tickets", "github_reviews",
+                "agents",
+                "owners",
+                "agent_versions",
+                "runs",
+                "tasks",
+                "tool_calls",
+                "tokens",
+                "delegations",
+                "connectors",
+                "secret_aliases",
+                "oauth_providers",
+                "credential_connections",
+                "credential_grants",
+                "grant_delegations",
+                "oauth_states",
+                "connect_sessions",
+                "api_keys",
+                "apps",
+                "app_identity_providers",
+                "app_users",
+                "user_sessions",
+                "user_session_tenants",
+                "browser_oidc_states",
+                "approvals",
+                "policy_bundles",
+                "revocations",
+                "audit_events",
+                "action_requests",
+                "enforcement_trace_records",
+                "request_nonces",
+                "execution_requests",
+                "settings",
+                "crm_cases",
+                "email_drafts",
+                "jira_tickets",
+                "github_reviews",
                 "emulator_resources",
             )
             for table in tenant_tables:
@@ -548,6 +720,10 @@ class PostgresDatabase:
                 "ALTER TABLE oauth_providers ADD COLUMN IF NOT EXISTS identity_id_field TEXT NOT NULL DEFAULT 'id'",
                 "ALTER TABLE oauth_providers ADD COLUMN IF NOT EXISTS identity_label_field TEXT NOT NULL DEFAULT 'name'",
                 "ALTER TABLE oauth_providers ADD COLUMN IF NOT EXISTS scope_separator TEXT NOT NULL DEFAULT ' '",
+                "ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS key_id TEXT",
+                "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS token_hash TEXT",
+                "ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS csrf_hash TEXT",
+                "ALTER TABLE browser_oidc_states ADD COLUMN IF NOT EXISTS tenant_context TEXT NOT NULL DEFAULT 'system'",
             ):
                 connection.execute(statement)
             # Public verification keys are shared infrastructure metadata. They
@@ -560,22 +736,55 @@ class PostgresDatabase:
             # the originating tenant scope before writing any tenant data.
             connection.execute("ALTER TABLE oauth_states DISABLE ROW LEVEL SECURITY")
             connection.execute("DROP POLICY IF EXISTS tenant_isolation ON oauth_states")
+            connection.execute(
+                "ALTER TABLE browser_oidc_states DISABLE ROW LEVEL SECURITY"
+            )
+            connection.execute(
+                "DROP POLICY IF EXISTS tenant_isolation ON browser_oidc_states"
+            )
+            connection.execute(
+                "ALTER TABLE user_session_tenants DISABLE ROW LEVEL SECURITY"
+            )
+            connection.execute(
+                "DROP POLICY IF EXISTS tenant_isolation ON user_session_tenants"
+            )
 
     def _verify_schema(self) -> None:
         required_tables = {
-            "agents", "runs", "tasks", "tokens", "connectors",
-            "credential_connections", "credential_grants", "policy_bundles",
-            "audit_events", "execution_requests",
+            "agents",
+            "runs",
+            "tasks",
+            "tokens",
+            "connectors",
+            "credential_connections",
+            "credential_grants",
+            "policy_bundles",
+            "audit_events",
+            "execution_requests",
+            "enforcement_trace_records",
+            "connect_sessions",
+            "api_keys",
+            "apps",
+            "app_identity_providers",
+            "app_users",
+            "user_sessions",
+            "user_session_tenants",
+            "browser_oidc_states",
         }
         required_columns = {
             ("connectors", "grant_required"),
             ("connectors", "credential_mode"),
             ("policy_bundles", "layer"),
             ("policy_bundles", "target_id"),
+            ("audit_events", "key_id"),
+            ("user_sessions", "token_hash"),
+            ("user_sessions", "csrf_hash"),
+            ("browser_oidc_states", "tenant_context"),
         }
         with self.connect() as connection:
             existing_tables = {
-                row["table_name"] for row in connection.execute(
+                row["table_name"]
+                for row in connection.execute(
                     """SELECT table_name FROM information_schema.tables
                     WHERE table_schema='public'"""
                 ).fetchall()

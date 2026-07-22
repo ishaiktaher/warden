@@ -19,7 +19,8 @@ class RequestBodyLimitTests(unittest.TestCase):
 
         response = TestClient(app).post("/", content=b"x" * 33)
         self.assertEqual(413, response.status_code)
-        self.assertIn("configured limit", response.json()["detail"])
+        self.assertIn("configured limit", response.json()["error"]["detail"])
+        self.assertEqual("invalid_request", response.json()["error"]["code"])
 
 
 if __name__ == "__main__":

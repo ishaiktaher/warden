@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { WardenClient, WardenError } from "../dist/esm/index.js";
+import { RevokedError, WardenClient, WardenError } from "../dist/esm/index.js";
 
 function jsonResponse(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -77,8 +77,9 @@ test("structured HTTP failures become WardenError without exposing authorization
     baseUrl: "https://warden.example.com",
     accessToken: "must-not-appear",
     fetch: async () => jsonResponse(
-      { detail: "Credential grant is unavailable", code: "grant_revoked" },
-      403,
+      { error: { detail: "API key is revoked", code: "revoked", retryable: false,
+        request_id: "request-123" } },
+      401,
       { "X-Request-ID": "request-123" },
     ),
   });
@@ -86,8 +87,10 @@ test("structured HTTP failures become WardenError without exposing authorization
     () => client.listGrants(),
     (error) => {
       assert.ok(error instanceof WardenError);
-      assert.equal(error.status, 403);
-      assert.equal(error.code, "grant_revoked");
+      assert.ok(error instanceof RevokedError);
+      assert.equal(error.status, 401);
+      assert.equal(error.code, "revoked");
+      assert.equal(error.retryable, false);
       assert.equal(error.requestId, "request-123");
       assert.equal(String(error).includes("must-not-appear"), false);
       return true;

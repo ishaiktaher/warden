@@ -36,9 +36,12 @@ curl -X POST https://warden.example.com/admin/oauth/providers/github \
   -d '{"provider_id":"github","client_id":"<client-id>","client_secret_alias":"github-oauth-client","default_scopes":["repo"]}'
 ```
 
-The signed-in user calls `POST /connect/github/start` with the target agent,
-Warden action scopes and method/path restrictions. Warden returns a GitHub
-authorization URL. The callback validates the one-time state, exchanges the
+The application backend calls `POST /admin/connect/sessions` with the canonical
+principal, target agent, provider allowlist, Warden scopes and method/path
+restrictions. It passes only the returned short-lived `session_token` to the
+browser. The browser calls `POST /connect/github/start` with that token; Warden
+consumes it exactly once and returns a GitHub authorization URL. The callback
+validates the one-time OAuth state, exchanges the
 code, verifies the GitHub identity through `GET /user`, stores the credential
 through the configured secrets provider, creates the grant and delegates it to
 the selected agent.

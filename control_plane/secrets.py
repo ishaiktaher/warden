@@ -32,7 +32,9 @@ class SecretsBroker:
         if env_key:
             key = env_key
         elif settings.production:
-            raise RuntimeError("CONTROL_PLANE_SECRETS_KEY or an external broker is required")
+            raise RuntimeError(
+                "CONTROL_PLANE_SECRETS_KEY or an external broker is required"
+            )
         else:
             if not key_path.exists():
                 key_path.write_bytes(Fernet.generate_key())
@@ -40,7 +42,9 @@ class SecretsBroker:
             key = key_path.read_bytes().strip()
         self.fernet = Fernet(key)
 
-    def store(self, alias: str, value: str, actor: str, provider: str = "local-encrypted") -> None:
+    def store(
+        self, alias: str, value: str, actor: str, provider: str = "local-encrypted"
+    ) -> None:
         if not alias or not value:
             raise ValueError("Secret alias and value are required")
         storage_alias = self.database.namespace(alias)
@@ -64,14 +68,22 @@ class SecretsBroker:
                 status='active',rotated_at=excluded.created_at""",
                 (storage_alias, encrypted, provider, "active", now),
             )
-        self.audit.append("secret.rotated", actor, payload={"alias": alias, "provider": provider})
+        self.audit.append(
+            "secret.rotated", actor, payload={"alias": alias, "provider": provider}
+        )
 
     def resolve_for_connector(
-        self, alias: str, *, connector_id: str, run_id: str, task_id: str, tool_call_id: str
+        self,
+        alias: str,
+        *,
+        connector_id: str,
+        run_id: str,
+        task_id: str,
+        tool_call_id: str,
     ) -> str:
         row = self.database.one(
             "SELECT encrypted_value,status FROM secret_aliases WHERE alias=?",
-            (self.database.namespace(alias),)
+            (self.database.namespace(alias),),
         )
         if not row or row["status"] != "active":
             raise RuntimeError("Secret alias is unavailable")
@@ -92,6 +104,28 @@ class SecretsBroker:
             raise RuntimeError("Local secret encryption is unavailable")
         return self.fernet.decrypt(row["encrypted_value"].encode()).decode()
 
+    def resolve_internal(self, alias: str, *, purpose: str) -> str:
+        """Resolve a control-plane secret, never exposing it through an API."""
+        row = self.database.one(
+            "SELECT encrypted_value,status FROM secret_aliases WHERE alias=?",
+            (self.database.namespace(alias),),
+        )
+        if not row or row["status"] != "active":
+            raise RuntimeError("Internal secret alias is unavailable")
+        self.audit.append(
+            "secret.internal_used",
+            "control-plane",
+            payload={
+                "alias": alias,
+                "purpose": purpose,
+            },
+        )
+        if self.external:
+            return self.external.get(row["encrypted_value"])
+        if self.fernet is None:
+            raise RuntimeError("Local secret encryption is unavailable")
+        return self.fernet.decrypt(row["encrypted_value"].encode()).decode()
+
     def revoke(self, alias: str, actor: str) -> None:
         storage_alias = self.database.namespace(alias)
         row = self.database.one(
@@ -101,7 +135,9 @@ class SecretsBroker:
             try:
                 self.external.revoke(row["encrypted_value"])
             except Exception as exc:
-                raise RuntimeError("Secrets provider could not revoke the secret") from exc
+                raise RuntimeError(
+                    "Secrets provider could not revoke the secret"
+                ) from exc
         self.database.execute(
             "UPDATE secret_aliases SET status='revoked' WHERE alias=?",
             (storage_alias,),

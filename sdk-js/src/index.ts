@@ -4,6 +4,9 @@ export type DataClassification = "public" | "internal" | "sensitive" | "restrict
 export interface WardenClientOptions {
   baseUrl: string;
   accessToken?: string;
+  apiKey?: string;
+  adminKey?: string;
+  csrfToken?: string;
   timeoutMs?: number;
   fetch?: typeof globalThis.fetch;
 }
@@ -11,6 +14,7 @@ export interface WardenClientOptions {
 export interface RequestOptions {
   signal?: AbortSignal;
   accessToken?: string;
+  headers?: Readonly<Record<string, string>>;
 }
 
 export interface RunCreate {
@@ -115,6 +119,9 @@ export interface DelegateCapabilityRequest {
 interface ErrorBody {
   detail?: unknown;
   code?: unknown;
+  retryable?: unknown;
+  request_id?: unknown;
+  error?: ErrorBody;
 }
 
 export class WardenError extends Error {
@@ -122,10 +129,11 @@ export class WardenError extends Error {
   readonly code: string | undefined;
   readonly requestId: string | undefined;
   readonly details: unknown;
+  readonly retryable: boolean;
 
   constructor(
     message: string,
-    options: { status: number; code?: string; requestId?: string; details?: unknown },
+    options: { status: number; code?: string; requestId?: string; details?: unknown; retryable?: boolean },
   ) {
     super(message);
     this.name = "WardenError";
@@ -133,8 +141,32 @@ export class WardenError extends Error {
     this.code = options.code;
     this.requestId = options.requestId;
     this.details = options.details;
+    this.retryable = options.retryable ?? false;
   }
 }
+
+export class InvalidRequestError extends WardenError {}
+export class InvalidScopeError extends WardenError {}
+export class InvalidKeyError extends WardenError {}
+export class ExpiredSessionError extends WardenError {}
+export class PolicyDeniedError extends WardenError {}
+export class ApprovalRequiredError extends WardenError {}
+export class RevokedError extends WardenError {}
+export class NotFoundError extends WardenError {}
+export class ConflictError extends WardenError {}
+export class UnauthorizedError extends WardenError {}
+export class ForbiddenError extends WardenError {}
+export class ProviderError extends WardenError {}
+export class UnavailableError extends WardenError {}
+
+const ERROR_TYPES: Record<string, typeof WardenError> = {
+  invalid_request: InvalidRequestError, invalid_scope: InvalidScopeError,
+  invalid_key: InvalidKeyError, expired_session: ExpiredSessionError,
+  policy_denied: PolicyDeniedError, approval_required: ApprovalRequiredError,
+  revoked: RevokedError, not_found: NotFoundError, conflict: ConflictError,
+  unauthorized: UnauthorizedError, forbidden: ForbiddenError,
+  provider_error: ProviderError, unavailable: UnavailableError,
+};
 
 function normalizeBaseUrl(value: string): string {
   const url = new URL(value);
@@ -166,6 +198,9 @@ export class WardenClient {
   readonly baseUrl: string;
   readonly timeoutMs: number;
   private readonly accessToken: string | undefined;
+  private readonly apiKey: string | undefined;
+  private readonly adminKey: string | undefined;
+  private readonly csrfToken: string | undefined;
   private readonly fetcher: typeof globalThis.fetch;
 
   constructor(options: WardenClientOptions) {
@@ -175,6 +210,9 @@ export class WardenClient {
       throw new TypeError("timeoutMs must be a positive finite number");
     }
     this.accessToken = options.accessToken;
+    this.apiKey = options.apiKey;
+    this.adminKey = options.adminKey;
+    this.csrfToken = options.csrfToken;
     const fetcher = options.fetch ?? globalThis.fetch;
     if (typeof fetcher !== "function") {
       throw new TypeError("A fetch implementation is required");
@@ -182,8 +220,23 @@ export class WardenClient {
     this.fetcher = fetcher;
   }
 
+  get app(): App { return new App(this); }
+  get agent(): Agent { return new Agent(this); }
+  get grant(): Grant { return new Grant(this); }
+  get key(): Key { return new Key(this); }
+  get approval(): Approval { return new Approval(this); }
+  get auditLog(): AuditLog { return new AuditLog(this); }
+
   health(options?: RequestOptions): Promise<Record<string, unknown>> {
     return this.request("GET", "/health", undefined, options);
+  }
+
+  portalSession(): Promise<Record<string, unknown>> {
+    return this.request("GET", "/portal/session");
+  }
+
+  logout(): Promise<Record<string, unknown>> {
+    return this.request("POST", "/portal/logout", {});
   }
 
   createRun(input: RunCreate, options?: RequestOptions): Promise<Record<string, unknown>> {
@@ -192,6 +245,32 @@ export class WardenClient {
 
   createTask(input: TaskCreate, options?: RequestOptions): Promise<Record<string, unknown>> {
     return this.request("POST", "/tasks", input, options);
+  }
+
+  issueCapability(input: { run_id: string; scopes: string[]; resources: string[]; ttl_seconds?: number }): Promise<Record<string, unknown>> {
+    return this.request("POST", "/admin/capabilities/issue", input);
+  }
+
+  registerConnector(input: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request("POST", "/admin/connectors", input);
+  }
+
+  createPolicy(input: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request("POST", "/admin/policies", input);
+  }
+
+  mintConnectSession(input: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request("POST", "/admin/connect/sessions", input);
+  }
+
+  async configureOAuthProvider(providerId: string, input: Record<string, unknown> & { client_secret?: string; client_secret_alias: string }): Promise<Record<string, unknown>> {
+    const { client_secret, ...config } = input;
+    if (client_secret) await this.request("POST", "/admin/secrets", { alias: input.client_secret_alias, value: client_secret, provider: "local-encrypted" });
+    return this.request("POST", `/admin/oauth/providers/${encodeURIComponent(providerId)}`, config);
+  }
+
+  enforcementTrace(callId: string): Promise<Record<string, unknown>> {
+    return this.request("GET", `/enforcement-traces/${encodeURIComponent(callId)}`);
   }
 
   execute(input: ActionRequest, options?: RequestOptions): Promise<ActionResult> {
@@ -215,19 +294,19 @@ export class WardenClient {
   }
 
   startGithubConnect(
-    input: GithubConnectRequest,
+    sessionToken: string,
     options?: RequestOptions,
   ): Promise<{ provider_id: "github"; connect_url: string; expires_at: string }> {
-    return this.request("POST", "/connect/github/start", input, options);
+    return this.request("POST", "/connect/github/start", { session_token: sessionToken }, options);
   }
 
   startOAuthConnect(
     providerId: string,
-    input: OAuthConnectRequest,
+    sessionToken: string,
     options?: RequestOptions,
   ): Promise<{ provider_id: string; connect_url: string; expires_at: string }> {
     return this.request(
-      "POST", `/connect/${encodeURIComponent(providerId)}/start`, input, options,
+      "POST", `/connect/${encodeURIComponent(providerId)}/start`, { session_token: sessionToken }, options,
     );
   }
 
@@ -294,7 +373,7 @@ export class WardenClient {
       : path;
   }
 
-  private async request<T>(
+  async request<T>(
     method: string,
     path: string,
     body?: unknown,
@@ -308,8 +387,12 @@ export class WardenClient {
     const timer = setTimeout(abort, this.timeoutMs);
     const accessToken = options?.accessToken ?? this.accessToken;
     const headers: Record<string, string> = { Accept: "application/json" };
+    for (const [name, value] of Object.entries(options?.headers ?? {})) headers[name] = value;
     if (body !== undefined) headers["Content-Type"] = "application/json";
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    else if (this.apiKey) headers["X-Warden-Key"] = this.apiKey;
+    else if (this.adminKey) headers["X-Admin-Key"] = this.adminKey;
+    if (method !== "GET" && method !== "HEAD" && this.csrfToken) headers["X-CSRF-Token"] = this.csrfToken;
     try {
       const response = await this.fetcher(`${this.baseUrl}${path}`, {
         method,
@@ -324,16 +407,20 @@ export class WardenClient {
         ? await response.json()
         : await response.text();
       if (!response.ok) {
-        const error = typeof payload === "object" && payload !== null
+        const outer = typeof payload === "object" && payload !== null
           ? payload as ErrorBody
           : {};
+        const error = outer.error ?? outer;
         const detail = typeof error.detail === "string"
           ? error.detail
           : `Warden request failed with HTTP ${response.status}`;
-        throw new WardenError(detail, {
+        const code = typeof error.code === "string" ? error.code : undefined;
+        const ErrorType = code ? (ERROR_TYPES[code] ?? WardenError) : WardenError;
+        throw new ErrorType(detail, {
           status: response.status,
-          ...(typeof error.code === "string" ? { code: error.code } : {}),
-          ...(requestId ? { requestId } : {}),
+          ...(code ? { code } : {}),
+          ...(typeof error.request_id === "string" ? { requestId: error.request_id } : requestId ? { requestId } : {}),
+          retryable: error.retryable === true,
           details: payload,
         });
       }
@@ -351,5 +438,112 @@ export class WardenClient {
       clearTimeout(timer);
       callerSignal?.removeEventListener("abort", abort);
     }
+  }
+}
+
+export class App {
+  constructor(private readonly client: WardenClient) {}
+  create(appId: string, name: string): Promise<Record<string, unknown>> {
+    return this.client.request("POST", "/admin/apps", { app_id: appId, name });
+  }
+  list(): Promise<ReadonlyArray<Record<string, unknown>>> {
+    return this.client.request("GET", "/admin/apps");
+  }
+  identity(appId: string): Promise<Record<string, unknown>> {
+    return this.client.request("GET", `/admin/apps/${encodeURIComponent(appId)}/identity`);
+  }
+  users(appId: string): Promise<ReadonlyArray<Record<string, unknown>>> {
+    return this.client.request("GET", `/admin/apps/${encodeURIComponent(appId)}/users`);
+  }
+  async configureIdentity(appId: string, input: Record<string, unknown> & { client_secret: string; client_secret_alias: string }): Promise<Record<string, unknown>> {
+    await this.client.request("POST", "/admin/secrets", { alias: input.client_secret_alias, value: input.client_secret, provider: "local-encrypted" });
+    const { client_secret: _, ...config } = input;
+    return this.client.request("POST", `/admin/apps/${encodeURIComponent(appId)}/identity-provider`, config);
+  }
+  async deprovision(appId: string, externalSubjectId: string, webhookSecret: string): Promise<Record<string, unknown>> {
+    const event = { event_id: nonce(), event_type: "user.deprovisioned", external_subject_id: externalSubjectId };
+    const bytes = new TextEncoder().encode(JSON.stringify(event));
+    const key = await globalThis.crypto.subtle.importKey("raw", new TextEncoder().encode(webhookSecret),
+      { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const digest = await globalThis.crypto.subtle.sign("HMAC", key, bytes);
+    const signature = [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
+    return this.client.request("POST", `/apps/${encodeURIComponent(appId)}/identity/webhook`, event,
+      { headers: { "X-Warden-Signature": `sha256=${signature}` } });
+  }
+}
+
+export class Agent {
+  constructor(private readonly client: WardenClient) {}
+  list(): Promise<ReadonlyArray<Record<string, unknown>>> {
+    return this.client.request("GET", "/admin/agents");
+  }
+  create(input: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.client.request("POST", "/admin/agents", input);
+  }
+  approve(agentId: string): Promise<Record<string, unknown>> {
+    return this.client.request("POST", `/admin/agents/${encodeURIComponent(agentId)}/approve`, {});
+  }
+}
+
+export class Grant {
+  constructor(private readonly client: WardenClient) {}
+  list(principalId?: string): Promise<CredentialGrant[]> {
+    const query = principalId ? `?principal_id=${encodeURIComponent(principalId)}` : "";
+    return this.client.request("GET", `/me/grants${query}`);
+  }
+}
+
+export class Key {
+  constructor(private readonly client: WardenClient) {}
+  mint(input: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.client.request("POST", "/admin/api-keys", input);
+  }
+  list(agentId?: string): Promise<ReadonlyArray<Record<string, unknown>>> {
+    return this.client.request("GET", `/admin/api-keys${agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ""}`);
+  }
+  deprecate(keyId: string): Promise<Record<string, unknown>> {
+    return this.client.request("POST", `/admin/api-keys/${encodeURIComponent(keyId)}/deprecate`, {});
+  }
+  revoke(keyId: string): Promise<Record<string, unknown>> {
+    return this.client.request("POST", `/admin/api-keys/${encodeURIComponent(keyId)}/revoke`, {});
+  }
+}
+
+export class Approval {
+  constructor(private readonly client: WardenClient) {}
+  get(approvalId: string, approverId: string): Promise<Record<string, unknown>> {
+    return this.client.request("GET", `/approvals/${encodeURIComponent(approvalId)}`, undefined,
+      { headers: { "X-Approver-ID": approverId } });
+  }
+  list(approverId: string, status = "pending"): Promise<ReadonlyArray<Record<string, unknown>>> {
+    return this.client.request("GET", `/approvals?status=${encodeURIComponent(status)}`, undefined,
+      { headers: { "X-Approver-ID": approverId } });
+  }
+  resolve(approvalId: string, approverId: string, approved: boolean, reason = ""): Promise<Record<string, unknown>> {
+    return this.client.request("POST", `/approvals/${encodeURIComponent(approvalId)}/resolve`, { approved, reason },
+      { headers: { "X-Approver-ID": approverId } });
+  }
+  async await(approvalId: string, approverId: string, timeoutMs = 600_000): Promise<Record<string, unknown>> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const result = await this.get(approvalId, approverId);
+      if (result.status !== "pending") return result;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(1_000, deadline - Date.now())));
+    }
+    throw new ExpiredSessionError("Approval wait timed out", {
+      status: 410, code: "expired_session",
+    });
+  }
+}
+
+export class AuditLog {
+  constructor(private readonly client: WardenClient) {}
+  page(filters: Readonly<Record<string, string | number>> = {}): Promise<Record<string, unknown>> {
+    const query = new URLSearchParams(Object.entries(filters).map(([key, value]) => [key, String(value)])).toString();
+    return this.client.request("GET", `/audit/events/page${query ? `?${query}` : ""}`);
+  }
+  exportCsv(filters: Readonly<Record<string, string>> = {}): Promise<string> {
+    const query = new URLSearchParams(filters).toString();
+    return this.client.request("GET", `/audit/export.csv${query ? `?${query}` : ""}`);
   }
 }
