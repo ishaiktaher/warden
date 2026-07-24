@@ -37,6 +37,8 @@ class ShowcaseTests(unittest.TestCase):
 
         homepage = self.client.get("/")
         self.assertIn("https://www.vouchins.com/images/logo.png", homepage.text)
+        self.assertIn("The authorization gateway for", homepage.text)
+        self.assertIn('id="copy-install"', homepage.text)
         self.assertIn('data-scenario="legitimate"', homepage.text)
         self.assertIn('data-scenario="malicious"', homepage.text)
         self.assertIn('<script src="/showcase.js" defer></script>', homepage.text)

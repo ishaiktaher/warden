@@ -94,6 +94,23 @@
     });
   });
 
+  const copyButton = document.querySelector("#copy-install");
+  const installCommand = document.querySelector("#install-command");
+  if (copyButton && installCommand) {
+    copyButton.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(installCommand.textContent);
+        copyButton.textContent = "COPIED";
+      } catch {
+        copyButton.textContent = "SELECT";
+        window.getSelection()?.selectAllChildren(installCommand);
+      }
+      window.setTimeout(() => {
+        copyButton.textContent = "COPY";
+      }, 1600);
+    });
+  }
+
   fetch("/proof")
     .then((response) => {
       if (!response.ok) throw new Error("proof unavailable");
