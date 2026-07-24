@@ -40,8 +40,8 @@ class DevGitHubOAuthTransport:
             self._audit("token", url)
             return _FixtureResponse(
                 {
-                    "access_token": "synthetic-github-token",
-                    "token_type": "bearer",
+                    "access_token": "synthetic-github-token",  # nosec B105
+                    "token_type": "bearer",  # nosec B105
                     "scope": "repo",
                 }
             )

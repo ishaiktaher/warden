@@ -17,7 +17,7 @@ CATALOG_VERSION = "2026-07-22"
 PROVIDER_CONTRACTS = {
     "github": {
         "authorization_url": "https://github.com/login/oauth/authorize",
-        "token_url": "https://github.com/login/oauth/access_token",
+        "token_url": "https://github.com/login/oauth/access_token",  # nosec B105
         "api_base_url": "https://api.github.com",
         "identity_url": "https://api.github.com/user",
         "identity_id_field": "id",
@@ -25,7 +25,7 @@ PROVIDER_CONTRACTS = {
     },
     "google": {
         "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth",
-        "token_url": "https://oauth2.googleapis.com/token",
+        "token_url": "https://oauth2.googleapis.com/token",  # nosec B105
         "api_base_url": "https://www.googleapis.com",
         "identity_url": "https://openidconnect.googleapis.com/v1/userinfo",
         "identity_id_field": "sub",
@@ -33,7 +33,7 @@ PROVIDER_CONTRACTS = {
     },
     "slack": {
         "authorization_url": "https://slack.com/oauth/v2/authorize",
-        "token_url": "https://slack.com/api/oauth.v2.access",
+        "token_url": "https://slack.com/api/oauth.v2.access",  # nosec B105
         "api_base_url": "https://slack.com/api",
         "identity_url": "https://slack.com/api/users.identity",
         "identity_id_field": "user.id",
@@ -41,7 +41,7 @@ PROVIDER_CONTRACTS = {
     },
     "notion": {
         "authorization_url": "https://api.notion.com/v1/oauth/authorize",
-        "token_url": "https://api.notion.com/v1/oauth/token",
+        "token_url": "https://api.notion.com/v1/oauth/token",  # nosec B105
         "api_base_url": "https://api.notion.com/v1",
         "identity_url": "https://api.notion.com/v1/users/me",
         "identity_id_field": "id",
@@ -49,7 +49,7 @@ PROVIDER_CONTRACTS = {
     },
     "stripe": {
         "authorization_url": "https://connect.stripe.com/oauth/authorize",
-        "token_url": "https://connect.stripe.com/oauth/token",
+        "token_url": "https://connect.stripe.com/oauth/token",  # nosec B105
         "api_base_url": "https://api.stripe.com/v1",
         "identity_url": "https://api.stripe.com/v1/account",
         "identity_id_field": "id",
