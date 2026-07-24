@@ -9,7 +9,11 @@ const state = {session: null, apps: [], agents: [], keys: [], grants: [], connec
 function show(target, value) { $(target).textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2); }
 function values(form) { return Object.fromEntries(new FormData(form).entries()); }
 function split(value) { return String(value || "").split(",").map((item) => item.trim()).filter(Boolean); }
-function error(target, failure) { show(target, failure instanceof WardenError ? {code: failure.code, detail: failure.message, retryable: failure.retryable} : {detail: String(failure)}); }
+function error(target, failure) {
+  show(target, failure instanceof WardenError
+    ? {code: failure.code, status: failure.status, detail: failure.message, retryable: failure.retryable, details: failure.details}
+    : {detail: String(failure)});
+}
 function button(label, handler, className = "secondary") { const node = document.createElement("button"); node.type = "button"; node.className = className; node.textContent = label; node.onclick = () => handler().catch((failure) => alert(failure.message)); return node; }
 function table(target, columns, rows, actions) {
   const root = $(target); root.replaceChildren(); const tableNode = document.createElement("table");
@@ -31,7 +35,35 @@ async function loadSession() {
 }
 $("#signin-button").onclick = () => { location.href = `/portal/auth/login/${encodeURIComponent($("#login-app").value.trim())}?redirect=/portal&tenant=${encodeURIComponent($("#login-tenant").value.trim())}`; };
 $("#logout-button").onclick = async () => { await client.logout(); location.reload(); };
-$("#bootstrap-form").onsubmit = async (event) => { event.preventDefault(); const input = values(event.currentTarget); const bootstrap = new WardenClient({baseUrl: location.origin, adminKey: input.admin_key}); await bootstrap.app.create(input.app_id, "Warden test portal"); const result = await bootstrap.app.configureIdentity(input.app_id, {issuer: input.issuer, client_id: input.client_id, client_secret: input.client_secret, client_secret_alias: `idp-client-${input.app_id}`, user_id_claim: "sub", email_claim: "email", groups_claim: "groups"}); $("#login-app").value = input.app_id; show("#session-result", {status: "portal_app_ready", app_id: input.app_id, webhook_secret: result.webhook_secret, next: "Sign in with configured OIDC"}); };
+$("#bootstrap-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const input = values(event.currentTarget);
+  const bootstrap = new WardenClient({baseUrl: location.origin, adminKey: input.admin_key});
+  try {
+    const apps = await bootstrap.app.list();
+    if (!apps.some((app) => app.app_id === input.app_id)) {
+      await bootstrap.app.create(input.app_id, "Warden test portal");
+    }
+    const result = await bootstrap.app.configureIdentity(input.app_id, {
+      issuer: input.issuer,
+      client_id: input.client_id,
+      client_secret: input.client_secret,
+      client_secret_alias: `idp-client-${input.app_id}`,
+      user_id_claim: "sub",
+      email_claim: "email",
+      groups_claim: "groups",
+    });
+    $("#login-app").value = input.app_id;
+    show("#session-result", {
+      status: "portal_app_ready",
+      app_id: input.app_id,
+      webhook_secret: result.webhook_secret,
+      next: "Sign in with configured OIDC",
+    });
+  } catch (failure) {
+    error("#session-result", failure);
+  }
+};
 
 async function loadApps() {
   state.apps = await client.app.list(); state.agents = await client.agent.list();

@@ -170,6 +170,36 @@ class PortalPrerequisiteTests(unittest.TestCase):
         )
         self.assertEqual("revoked", token_hash["status"])
 
+    @patch("control_plane.identity.jwt.decode")
+    @patch("control_plane.identity.jwt.PyJWKClient")
+    @patch("control_plane.identity.requests.get")
+    def test_identity_verification_uses_discovery_canonical_issuer(
+        self, get: Mock, jwk_client: Mock, decode: Mock
+    ) -> None:
+        discovery = Mock()
+        discovery.raise_for_status.return_value = None
+        discovery.json.return_value = {
+            "issuer": "https://tenant.us.auth0.com/",
+            "jwks_uri": "https://tenant.us.auth0.com/.well-known/jwks.json",
+        }
+        get.return_value = discovery
+        jwk_client.return_value.get_signing_key_from_jwt.return_value.key = "public-key"
+        decode.return_value = {"sub": "auth0|user"}
+
+        claims = self.plane.identity._verify(
+            {
+                "issuer": "https://tenant.us.auth0.com",
+                "client_id": "portal-client",
+            },
+            "header.payload.signature",
+        )
+
+        self.assertEqual("auth0|user", claims["sub"])
+        self.assertEqual(
+            "https://tenant.us.auth0.com/",
+            decode.call_args.kwargs["issuer"],
+        )
+
     def test_wus_session_is_principal_bound_and_revocation_is_typed(self) -> None:
         self._login()
         session_token = self.client.cookies["warden_session"]

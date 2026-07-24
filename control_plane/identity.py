@@ -90,7 +90,8 @@ class AppIdentityService:
             raise WardenAPIError("not_found", "App identity provider was not found")
         try:
             discovery = requests.get(
-                f"{provider['issuer']}/.well-known/openid-configuration", timeout=5
+                f"{str(provider['issuer']).rstrip('/')}/.well-known/openid-configuration",
+                timeout=5,
             )
             discovery.raise_for_status()
             authorization_endpoint = discovery.json()["authorization_endpoint"]
@@ -189,7 +190,8 @@ class AppIdentityService:
         )
         try:
             discovery = requests.get(
-                f"{provider['issuer']}/.well-known/openid-configuration", timeout=5
+                f"{str(provider['issuer']).rstrip('/')}/.well-known/openid-configuration",
+                timeout=5,
             )
             discovery.raise_for_status()
             token = requests.post(
@@ -282,7 +284,7 @@ class AppIdentityService:
             )
         if not self.database.one("SELECT app_id FROM apps WHERE app_id=?", (app_id,)):
             raise WardenAPIError("not_found", "App was not found")
-        issuer = config["issuer"].rstrip("/")
+        issuer = config["issuer"].strip()
         if not issuer.startswith("https://") and not (
             not self.settings.production and issuer.startswith("http://localhost")
         ):
@@ -485,18 +487,24 @@ class AppIdentityService:
     def _verify(provider: Any, token: str) -> dict[str, Any]:
         try:
             discovery = requests.get(
-                f"{provider['issuer']}/.well-known/openid-configuration", timeout=5
+                f"{str(provider['issuer']).rstrip('/')}/.well-known/openid-configuration",
+                timeout=5,
             )
             discovery.raise_for_status()
-            key = jwt.PyJWKClient(
-                discovery.json()["jwks_uri"]
-            ).get_signing_key_from_jwt(token)
+            metadata = discovery.json()
+            canonical_issuer = metadata.get("issuer")
+            if (
+                not isinstance(canonical_issuer, str)
+                or canonical_issuer.rstrip("/") != str(provider["issuer"]).rstrip("/")
+            ):
+                raise ValueError("OIDC discovery issuer does not match configured issuer")
+            key = jwt.PyJWKClient(metadata["jwks_uri"]).get_signing_key_from_jwt(token)
             return jwt.decode(
                 token,
                 key.key,
                 algorithms=["RS256"],
                 audience=provider["client_id"],
-                issuer=provider["issuer"],
+                issuer=canonical_issuer,
                 options={"require": ["exp", "sub"]},
             )
         except Exception as exc:

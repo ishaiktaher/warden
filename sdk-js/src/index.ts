@@ -213,7 +213,7 @@ export class WardenClient {
     this.apiKey = options.apiKey;
     this.adminKey = options.adminKey;
     this.csrfToken = options.csrfToken;
-    const fetcher = options.fetch ?? globalThis.fetch;
+    const fetcher = options.fetch ?? globalThis.fetch?.bind(globalThis);
     if (typeof fetcher !== "function") {
       throw new TypeError("A fetch implementation is required");
     }

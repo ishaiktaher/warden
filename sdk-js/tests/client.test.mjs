@@ -104,3 +104,19 @@ test("non-local plaintext control-plane URLs are rejected", () => {
     /must use HTTPS/,
   );
 });
+
+test("browser-native fetch keeps its required global receiver", async () => {
+  const originalFetch = globalThis.fetch;
+  let receiver;
+  globalThis.fetch = function () {
+    receiver = this;
+    return Promise.resolve(jsonResponse({ status: "ok" }));
+  };
+  try {
+    const client = new WardenClient({ baseUrl: "http://127.0.0.1:8000" });
+    await client.health();
+    assert.equal(receiver, globalThis);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
