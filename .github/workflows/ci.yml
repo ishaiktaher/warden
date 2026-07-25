@@ -85,7 +85,20 @@ jobs:
       - run: pip install -r requirements/dev.txt
       - run: ruff check api control_plane examples scripts tests sdk-python/src sdk-python/tests
       - run: mypy --ignore-missing-imports api control_plane examples scripts sdk-python/src
-      - run: python -m unittest discover -s tests -v
+      - name: Run Python tests with failure annotation
+        run: |
+          set +e
+          python -m unittest discover -s tests -v >test-output.log 2>&1
+          status=$?
+          cat test-output.log
+          if (( status != 0 )); then
+            message="$(tail -n 60 test-output.log)"
+            message="${message//'%'/'%25'}"
+            message="${message//$'\r'/'%0D'}"
+            message="${message//$'\n'/'%0A'}"
+            echo "::error title=Python test suite failed::$message"
+            exit "$status"
+          fi
       - name: Regenerate and verify public proof metadata
         run: |
           python -m scripts.generate_proof
