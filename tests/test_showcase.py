@@ -55,7 +55,7 @@ class ShowcaseTests(unittest.TestCase):
         self.assertEqual(health.json()["mode"], "read-only")
         proof = self.client.get("/proof").json()
         self.assertGreaterEqual(proof["test_cases"], 60)
-        self.assertEqual(3, proof["contract_tested_integrations"])
+        self.assertEqual(7, proof["contract_tested_integrations"])
         self.assertEqual(0, proof["live_verified_integrations"])
 
     def test_documentation_has_no_empty_or_broken_internal_links(self) -> None:
