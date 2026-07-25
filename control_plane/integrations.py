@@ -14,47 +14,66 @@ import re
 
 CATALOG_VERSION = "2026-07-22"
 
+
+def _oauth_contract(
+    authorization_url: str,
+    token_url: str,
+    api_base_url: str,
+    identity_url: str,
+    identity_id_field: str,
+    identity_label_field: str,
+) -> dict[str, str]:
+    return {
+        "authorization_url": authorization_url,
+        "token_url": token_url,
+        "api_base_url": api_base_url,
+        "identity_url": identity_url,
+        "identity_id_field": identity_id_field,
+        "identity_label_field": identity_label_field,
+    }
+
+
 PROVIDER_CONTRACTS = {
-    "github": {
-        "authorization_url": "https://github.com/login/oauth/authorize",
-        "token_url": "https://github.com/login/oauth/access_token",
-        "api_base_url": "https://api.github.com",
-        "identity_url": "https://api.github.com/user",
-        "identity_id_field": "id",
-        "identity_label_field": "login",
-    },
-    "google": {
-        "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth",
-        "token_url": "https://oauth2.googleapis.com/token",
-        "api_base_url": "https://www.googleapis.com",
-        "identity_url": "https://openidconnect.googleapis.com/v1/userinfo",
-        "identity_id_field": "sub",
-        "identity_label_field": "email",
-    },
-    "slack": {
-        "authorization_url": "https://slack.com/oauth/v2/authorize",
-        "token_url": "https://slack.com/api/oauth.v2.access",
-        "api_base_url": "https://slack.com/api",
-        "identity_url": "https://slack.com/api/users.identity",
-        "identity_id_field": "user.id",
-        "identity_label_field": "user.name",
-    },
-    "notion": {
-        "authorization_url": "https://api.notion.com/v1/oauth/authorize",
-        "token_url": "https://api.notion.com/v1/oauth/token",
-        "api_base_url": "https://api.notion.com/v1",
-        "identity_url": "https://api.notion.com/v1/users/me",
-        "identity_id_field": "id",
-        "identity_label_field": "name",
-    },
-    "stripe": {
-        "authorization_url": "https://connect.stripe.com/oauth/authorize",
-        "token_url": "https://connect.stripe.com/oauth/token",
-        "api_base_url": "https://api.stripe.com/v1",
-        "identity_url": "https://api.stripe.com/v1/account",
-        "identity_id_field": "id",
-        "identity_label_field": "business_profile.name",
-    },
+    "github": _oauth_contract(
+        "https://github.com/login/oauth/authorize",
+        "https://github.com/login/oauth/access_token",
+        "https://api.github.com",
+        "https://api.github.com/user",
+        "id",
+        "login",
+    ),
+    "google": _oauth_contract(
+        "https://accounts.google.com/o/oauth2/v2/auth",
+        "https://oauth2.googleapis.com/token",
+        "https://www.googleapis.com",
+        "https://openidconnect.googleapis.com/v1/userinfo",
+        "sub",
+        "email",
+    ),
+    "slack": _oauth_contract(
+        "https://slack.com/oauth/v2/authorize",
+        "https://slack.com/api/oauth.v2.access",
+        "https://slack.com/api",
+        "https://slack.com/api/users.identity",
+        "user.id",
+        "user.name",
+    ),
+    "notion": _oauth_contract(
+        "https://api.notion.com/v1/oauth/authorize",
+        "https://api.notion.com/v1/oauth/token",
+        "https://api.notion.com/v1",
+        "https://api.notion.com/v1/users/me",
+        "id",
+        "name",
+    ),
+    "stripe": _oauth_contract(
+        "https://connect.stripe.com/oauth/authorize",
+        "https://connect.stripe.com/oauth/token",
+        "https://api.stripe.com/v1",
+        "https://api.stripe.com/v1/account",
+        "id",
+        "business_profile.name",
+    ),
 }
 
 _VERIFIED: dict[str, tuple[str, str | None]] = {

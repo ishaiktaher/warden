@@ -15,6 +15,10 @@ from fastapi.responses import RedirectResponse
 from . import api as core
 
 
+SYNTHETIC_CREDENTIAL = "synthetic-github-token"
+BEARER_SCHEME = "bearer"
+
+
 class _FixtureResponse:
     def __init__(self, payload: dict[str, Any], status_code: int = 200):
         self._payload = payload
@@ -40,8 +44,8 @@ class DevGitHubOAuthTransport:
             self._audit("token", url)
             return _FixtureResponse(
                 {
-                    "access_token": "synthetic-github-token",
-                    "token_type": "bearer",
+                    "access_token": SYNTHETIC_CREDENTIAL,
+                    "token_type": BEARER_SCHEME,
                     "scope": "repo",
                 }
             )

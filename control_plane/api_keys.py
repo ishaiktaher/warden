@@ -141,12 +141,13 @@ class APIKeyService:
         return self._public(row)
 
     def list(self, *, agent_id: str | None = None) -> list[dict[str, Any]]:
-        rows = self.database.all(
-            "SELECT * FROM api_keys"
-            + (" WHERE agent_id=?" if agent_id else "")
-            + " ORDER BY created_at",
-            (agent_id,) if agent_id else (),
-        )
+        if agent_id:
+            rows = self.database.all(
+                "SELECT * FROM api_keys WHERE agent_id=? ORDER BY created_at",
+                (agent_id,),
+            )
+        else:
+            rows = self.database.all("SELECT * FROM api_keys ORDER BY created_at")
         return [self._public(row) for row in rows]
 
     def deprecate(self, key_id: str, actor: str) -> dict[str, Any]:

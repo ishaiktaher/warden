@@ -123,7 +123,7 @@ async def production_identity_scope(request: Request, call_next):
                 request.state.principal = Principal(
                     session["user_id"],
                     tenant,
-                    frozenset({"warden:admin", "warden:runtime", "warden:auditor"}),
+                    _portal_roles(session),
                     on_behalf_of=session["user_id"],
                 )
                 if cookie_session and request.method not in {"GET", "HEAD", "OPTIONS"}:
@@ -217,6 +217,39 @@ async def production_identity_scope(request: Request, call_next):
         return await call_next(request)
 
 
+def _portal_roles(session: dict) -> frozenset[str]:
+    """Map verified application groups to least-privilege Warden roles."""
+
+    if not plane.settings.production:
+        return frozenset(
+            {
+                "warden:portal",
+                "warden:admin",
+                "warden:approver",
+                "warden:runtime",
+                "warden:auditor",
+            }
+        )
+    groups = set(session.get("groups") or ())
+    roles = {"warden:portal"}
+    if groups.intersection(plane.settings.portal_admin_groups):
+        roles.update(
+            {
+                "warden:admin",
+                "warden:approver",
+                "warden:runtime",
+                "warden:auditor",
+            }
+        )
+    if groups.intersection(plane.settings.portal_approver_groups):
+        roles.add("warden:approver")
+    if groups.intersection(plane.settings.portal_auditor_groups):
+        roles.add("warden:auditor")
+    if groups.intersection(plane.settings.portal_runtime_groups):
+        roles.add("warden:runtime")
+    return frozenset(roles)
+
+
 def admin_actor(
     request: Request,
     x_admin_key: Annotated[str | None, Header()] = None,
@@ -225,6 +258,7 @@ def admin_actor(
     try:
         portal_session = getattr(request.state, "portal_session", None)
         if portal_session:
+            request.state.principal.require_any_role("warden:admin")
             return portal_session["owner"]
         if plane.settings.production:
             principal = request.state.principal
@@ -297,8 +331,12 @@ def approval_actor(
         if not x_approver_id:
             raise WardenAPIError("unauthorized", "X-Approver-ID is required")
         return x_approver_id
-    principal = request.state.principal
-    return principal.subject
+    try:
+        principal = request.state.principal
+        principal.require_any_role("warden:approver", "warden:admin")
+        return principal.subject
+    except AuthenticationError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from None
 
 
 def guarded(call):

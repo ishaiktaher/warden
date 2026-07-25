@@ -8,6 +8,8 @@ spec:
   jobTemplate:
     spec:
       template:
+        metadata:
+          labels: {app: warden-control-plane}
         spec:
           restartPolicy: Never
           serviceAccountName: warden-control-plane
@@ -21,6 +23,9 @@ spec:
                 - configMapRef: {name: warden-config}
                 - secretRef: {name: warden-runtime}
               securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: 250m, memory: 256Mi}
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -32,6 +37,8 @@ spec:
   jobTemplate:
     spec:
       template:
+        metadata:
+          labels: {app: warden-control-plane}
         spec:
           restartPolicy: Never
           serviceAccountName: warden-control-plane
@@ -45,3 +52,6 @@ spec:
                 - configMapRef: {name: warden-config}
                 - secretRef: {name: warden-runtime}
               securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {cpu: 250m, memory: 256Mi}

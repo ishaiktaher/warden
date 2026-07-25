@@ -73,6 +73,49 @@ class ProductionPreflightTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(len(result.warnings), 5)
 
+    def test_portal_admin_group_mapping_is_required(self) -> None:
+        result = evaluate_production_settings(
+            replace(valid_settings(), portal_admin_groups=())
+        )
+        self.assertFalse(result.ok)
+        self.assertIn(
+            "WARDEN_PORTAL_ADMIN_GROUPS must contain at least one group",
+            result.errors,
+        )
+
+    def test_native_provider_prerequisites_fail_fast(self) -> None:
+        settings = replace(
+            valid_settings(),
+            signing_provider="aws_kms",
+            secrets_provider="gcp_secret_manager",
+            audit_provider="azure_blob",
+            signing_provider_url=None,
+            secrets_provider_url=None,
+            audit_provider_url=None,
+            provider_auth_token=None,
+        )
+        result = evaluate_production_settings(settings)
+        self.assertFalse(result.ok)
+        self.assertIn("aws_kms requires WARDEN_PROVIDER_REGION", result.errors)
+        self.assertIn("aws_kms requires WARDEN_SIGNING_KEY_ID", result.errors)
+        self.assertIn(
+            "gcp_secret_manager requires WARDEN_SECRETS_PREFIX",
+            result.errors,
+        )
+        self.assertIn("WARDEN_AUDIT_PROVIDER_URL must be an HTTPS URL", result.errors)
+        self.assertIn("azure_blob requires WARDEN_AUDIT_TARGET", result.errors)
+
+    def test_unknown_provider_name_is_rejected_but_custom_factory_is_allowed(self) -> None:
+        invalid = evaluate_production_settings(
+            replace(valid_settings(), signing_provider="mystery")
+        )
+        self.assertIn("Unknown provider: mystery", invalid.errors)
+
+        custom = evaluate_production_settings(
+            replace(valid_settings(), signing_provider="company.security:signer")
+        )
+        self.assertTrue(custom.ok)
+
 
 if __name__ == "__main__":
     unittest.main()

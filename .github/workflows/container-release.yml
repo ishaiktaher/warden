@@ -14,6 +14,22 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: core
+            suffix: ""
+            requirements: requirements.txt
+          - variant: aws
+            suffix: "-aws"
+            requirements: requirements/providers/aws.txt
+          - variant: azure
+            suffix: "-azure"
+            requirements: requirements/providers/azure.txt
+          - variant: gcp
+            suffix: "-gcp"
+            requirements: requirements/providers/gcp.txt
     environment: production-release
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -28,12 +44,13 @@ jobs:
         with:
           images: ghcr.io/ishaiktaher/warden
           tags: |
-            type=semver,pattern={{version}}
-            type=sha
+            type=semver,pattern={{version}},suffix=${{ matrix.suffix }}
+            type=sha,suffix=${{ matrix.suffix }}
       - id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
+          build-args: REQUIREMENTS_FILE=${{ matrix.requirements }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

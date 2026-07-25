@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from dataclasses import replace
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 import hashlib
@@ -221,6 +222,32 @@ class PortalPrerequisiteTests(unittest.TestCase):
         )
         self.assertEqual(401, rejected.status_code)
         self.assertEqual("revoked", rejected.json()["error"]["code"])
+
+    def test_production_portal_roles_are_default_deny_and_group_mapped(self) -> None:
+        self._login()
+        self.plane.settings = replace(
+            self.plane.settings,
+            environment="prod",
+            portal_admin_groups=("warden-admin",),
+            portal_approver_groups=("warden-approver",),
+            portal_auditor_groups=("warden-auditor",),
+            portal_runtime_groups=("warden-runtime",),
+        )
+        self.plane.database.execute(
+            "UPDATE app_users SET groups_json='[]' WHERE external_subject_id='subject-1'"
+        )
+
+        denied_admin = self.client.get("/admin/apps")
+        denied_approval = self.client.get("/approvals")
+        self.assertEqual(401, denied_admin.status_code)
+        self.assertEqual(403, denied_approval.status_code)
+
+        self.plane.database.execute(
+            """UPDATE app_users SET groups_json='["warden-admin"]'
+            WHERE external_subject_id='subject-1'"""
+        )
+        self.assertEqual(200, self.client.get("/admin/apps").status_code)
+        self.assertEqual(200, self.client.get("/approvals").status_code)
 
     def test_expired_and_tampered_wus_sessions_are_typed(self) -> None:
         self._login()

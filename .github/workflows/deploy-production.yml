@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: read
+  packages: read
+  attestations: read
 
 concurrency:
   group: warden-production
@@ -31,6 +33,14 @@ jobs:
             echo "image_digest must contain exactly 64 lowercase hexadecimal characters" >&2
             exit 1
           }
+      - name: Verify GitHub build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          gh attestation verify \
+            "oci://ghcr.io/ishaiktaher/warden@${IMAGE_DIGEST}" \
+            --repo "$GITHUB_REPOSITORY"
       - name: Validate production environment configuration
         env:
           KUBE_CONFIG_BASE64: ${{ secrets.KUBE_CONFIG_BASE64 }}
@@ -39,6 +49,11 @@ jobs:
           AUDIT_PROVIDER: ${{ vars.WARDEN_AUDIT_PROVIDER }}
           EGRESS_HOSTS: ${{ vars.CONTROL_PLANE_ALLOWED_EGRESS_HOSTS }}
           ALLOWED_ORIGINS: ${{ vars.WARDEN_ALLOWED_ORIGINS }}
+          PORTAL_ADMIN_GROUPS: ${{ vars.WARDEN_PORTAL_ADMIN_GROUPS }}
+          OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          POSTGRES_EGRESS_CIDRS: ${{ vars.WARDEN_POSTGRES_EGRESS_CIDRS }}
+          REDIS_EGRESS_CIDRS: ${{ vars.WARDEN_REDIS_EGRESS_CIDRS }}
+          HTTPS_EGRESS_CIDRS: ${{ vars.WARDEN_HTTPS_EGRESS_CIDRS }}
         run: |
           missing=()
           [[ -n "$KUBE_CONFIG_BASE64" ]] || missing+=(KUBE_CONFIG_BASE64)
@@ -47,6 +62,11 @@ jobs:
           [[ -n "$AUDIT_PROVIDER" ]] || missing+=(WARDEN_AUDIT_PROVIDER)
           [[ -n "$EGRESS_HOSTS" ]] || missing+=(CONTROL_PLANE_ALLOWED_EGRESS_HOSTS)
           [[ -n "$ALLOWED_ORIGINS" ]] || missing+=(WARDEN_ALLOWED_ORIGINS)
+          [[ -n "$PORTAL_ADMIN_GROUPS" ]] || missing+=(WARDEN_PORTAL_ADMIN_GROUPS)
+          [[ -n "$OTLP_ENDPOINT" ]] || missing+=(OTEL_EXPORTER_OTLP_ENDPOINT)
+          [[ -n "$POSTGRES_EGRESS_CIDRS" ]] || missing+=(WARDEN_POSTGRES_EGRESS_CIDRS)
+          [[ -n "$REDIS_EGRESS_CIDRS" ]] || missing+=(WARDEN_REDIS_EGRESS_CIDRS)
+          [[ -n "$HTTPS_EGRESS_CIDRS" ]] || missing+=(WARDEN_HTTPS_EGRESS_CIDRS)
           if (( ${#missing[@]} )); then
             printf 'Missing production environment setting: %s\n' "${missing[@]}" >&2
             exit 1
@@ -72,7 +92,10 @@ jobs:
           kubectl version --client
       - name: Verify production cluster prerequisites
         run: |
-          kubectl apply -f deploy/production/namespace.yaml
+          kubectl -n warden get serviceaccounts >/dev/null 2>&1 || {
+            echo "The deploy identity cannot access the pre-created warden namespace" >&2
+            exit 1
+          }
           missing=()
           for secret in warden-runtime warden-migration-runtime warden-vouchins-tls; do
             kubectl -n warden get secret "$secret" >/dev/null 2>&1 || missing+=("$secret")
@@ -104,11 +127,6 @@ jobs:
                 exit 1
               }
           done
-      - name: Apply reviewed release manifests
-        env:
-          IMAGE_DIGEST: ${{ inputs.image_digest }}
-        run: |
-          kubectl kustomize deploy/production | sed "s|sha256:replace-with-reviewed-digest|${IMAGE_DIGEST}|g" | kubectl apply -f -
       - name: Apply environment-specific non-secret configuration
         env:
           SIGNING_PROVIDER: ${{ vars.WARDEN_SIGNING_PROVIDER }}
@@ -119,7 +137,21 @@ jobs:
           AUDIT_URL: ${{ vars.WARDEN_AUDIT_PROVIDER_URL }}
           EGRESS_HOSTS: ${{ vars.CONTROL_PLANE_ALLOWED_EGRESS_HOSTS }}
           ALLOWED_ORIGINS: ${{ vars.WARDEN_ALLOWED_ORIGINS }}
+          PORTAL_ADMIN_GROUPS: ${{ vars.WARDEN_PORTAL_ADMIN_GROUPS }}
+          PORTAL_APPROVER_GROUPS: ${{ vars.WARDEN_PORTAL_APPROVER_GROUPS }}
+          PORTAL_AUDITOR_GROUPS: ${{ vars.WARDEN_PORTAL_AUDITOR_GROUPS }}
+          PORTAL_RUNTIME_GROUPS: ${{ vars.WARDEN_PORTAL_RUNTIME_GROUPS }}
+          OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+          SIGNING_KEY_ID: ${{ vars.WARDEN_SIGNING_KEY_ID }}
+          SECRETS_PREFIX: ${{ vars.WARDEN_SECRETS_PREFIX }}
+          AUDIT_TARGET: ${{ vars.WARDEN_AUDIT_TARGET }}
+          PROVIDER_REGION: ${{ vars.WARDEN_PROVIDER_REGION }}
+          PROVIDER_MOUNT: ${{ vars.WARDEN_PROVIDER_MOUNT }}
+          PROVIDER_NAMESPACE: ${{ vars.WARDEN_PROVIDER_NAMESPACE }}
+          PROVIDER_LIBRARY: ${{ vars.WARDEN_PROVIDER_LIBRARY }}
+          PROVIDER_TOKEN_LABEL: ${{ vars.WARDEN_PROVIDER_TOKEN_LABEL }}
         run: |
+          kubectl apply -f deploy/production/service-account.yaml
           kubectl -n warden create configmap warden-config \
             --from-literal=CONTROL_PLANE_ENV=prod \
             --from-literal=CONTROL_PLANE_ISSUER=warden-control-plane \
@@ -133,18 +165,66 @@ jobs:
             --from-literal=WARDEN_AUDIT_PROVIDER_URL="$AUDIT_URL" \
             --from-literal=CONTROL_PLANE_ALLOWED_EGRESS_HOSTS="$EGRESS_HOSTS" \
             --from-literal=WARDEN_ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
+            --from-literal=WARDEN_PORTAL_ADMIN_GROUPS="$PORTAL_ADMIN_GROUPS" \
+            --from-literal=WARDEN_PORTAL_APPROVER_GROUPS="$PORTAL_APPROVER_GROUPS" \
+            --from-literal=WARDEN_PORTAL_AUDITOR_GROUPS="$PORTAL_AUDITOR_GROUPS" \
+            --from-literal=WARDEN_PORTAL_RUNTIME_GROUPS="$PORTAL_RUNTIME_GROUPS" \
+            --from-literal=OTEL_EXPORTER_OTLP_ENDPOINT="$OTLP_ENDPOINT" \
+            --from-literal=WARDEN_SIGNING_KEY_ID="$SIGNING_KEY_ID" \
+            --from-literal=WARDEN_SECRETS_PREFIX="$SECRETS_PREFIX" \
+            --from-literal=WARDEN_AUDIT_TARGET="$AUDIT_TARGET" \
+            --from-literal=WARDEN_PROVIDER_REGION="$PROVIDER_REGION" \
+            --from-literal=WARDEN_PROVIDER_MOUNT="$PROVIDER_MOUNT" \
+            --from-literal=WARDEN_PROVIDER_NAMESPACE="$PROVIDER_NAMESPACE" \
+            --from-literal=WARDEN_PROVIDER_LIBRARY="$PROVIDER_LIBRARY" \
+            --from-literal=WARDEN_PROVIDER_TOKEN_LABEL="$PROVIDER_TOKEN_LABEL" \
             --dry-run=client -o yaml | kubectl apply -f -
+      - name: Apply reviewed network egress policy
+        env:
+          POSTGRES_EGRESS_CIDRS: ${{ vars.WARDEN_POSTGRES_EGRESS_CIDRS }}
+          REDIS_EGRESS_CIDRS: ${{ vars.WARDEN_REDIS_EGRESS_CIDRS }}
+          HTTPS_EGRESS_CIDRS: ${{ vars.WARDEN_HTTPS_EGRESS_CIDRS }}
+        run: |
+          python -m scripts.render_network_policy \
+            --postgres "$POSTGRES_EGRESS_CIDRS" \
+            --redis "$REDIS_EGRESS_CIDRS" \
+            --https "$HTTPS_EGRESS_CIDRS" |
+            kubectl apply -f -
+      - name: Run strict production preflight with the release image
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          kubectl -n warden delete job warden-production-preflight --ignore-not-found
+          sed "s|sha256:replace-with-reviewed-digest|${IMAGE_DIGEST}|g" \
+            deploy/k8s-preflight-job.yaml | kubectl -n warden apply -f -
+          if ! kubectl -n warden wait \
+            --for=condition=complete job/warden-production-preflight --timeout=180s; then
+            kubectl -n warden logs job/warden-production-preflight
+            exit 1
+          fi
+          kubectl -n warden logs job/warden-production-preflight
       - name: Run schema migration with the release image
         env:
           IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
           kubectl -n warden delete job warden-schema-migrate --ignore-not-found
           sed "s|sha256:replace-with-reviewed-digest|${IMAGE_DIGEST}|g" deploy/k8s-migrate-job.yaml | kubectl -n warden apply -f -
-          kubectl -n warden wait --for=condition=complete job/warden-schema-migrate --timeout=300s
-      - name: Complete rollout after migration
+          if ! kubectl -n warden wait \
+            --for=condition=complete job/warden-schema-migrate --timeout=300s; then
+            kubectl -n warden logs job/warden-schema-migrate
+            exit 1
+          fi
+          kubectl -n warden logs job/warden-schema-migrate
+      - name: Roll out reviewed release after migration
+        env:
+          IMAGE_DIGEST: ${{ inputs.image_digest }}
         run: |
-          kubectl -n warden rollout restart deployment/warden-control-plane
+          kubectl kustomize deploy/production |
+            sed "s|sha256:replace-with-reviewed-digest|${IMAGE_DIGEST}|g" |
+            kubectl apply -f -
           kubectl -n warden rollout status deployment/warden-control-plane --timeout=300s
+          sed "s|sha256:replace-with-reviewed-digest|${IMAGE_DIGEST}|g" \
+            deploy/k8s-maintenance-cronjobs.yaml | kubectl -n warden apply -f -
       - name: Verify public readiness
         run: |
           curl --fail --silent --show-error https://warden.vouchins.com/ready | jq -e '.status == "ready"'

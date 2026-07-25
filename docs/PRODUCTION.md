@@ -56,10 +56,11 @@ vendor for compute, identity, signing, secrets, audit, database or telemetry.
 ## Required operator inputs
 
 Run the offline, secret-safe configuration preflight before starting a
-production process:
+production process. Deployments should use strict mode so operational warnings
+also block rollout:
 
 ```bash
-CONTROL_PLANE_ENV=prod .venv/bin/python -m scripts.production_preflight
+CONTROL_PLANE_ENV=prod .venv/bin/python -m scripts.production_preflight --strict
 ```
 
 The command contacts no provider and never prints configuration values. Errors
@@ -90,13 +91,15 @@ explicit operator decision.
 7. Anchor the audit chain and independently verify the retention receipt.
 8. Canary the release, observe SLOs, then increase traffic.
 
-The Kubernetes manifest in `deploy/k8s.yaml` is a secure template, not a
-drop-in environment definition. Its default-deny policy intentionally permits
-only cluster DNS; operators must add explicit egress rules for their database,
-Redis, OIDC, OTLP, custody providers and approved connectors. Replace the image
-placeholder with a reviewed digest and supply `warden-runtime` from an external
-secret controller. If a selected cloud workload-identity provider requires a
-projected service-account token, enable it narrowly for that service account.
+The reusable development-oriented manifest in `deploy/k8s.yaml` is a template,
+not a drop-in environment definition. The production overlay in
+`deploy/production/` is the release baseline. Its default-deny policy permits
+only ingress-controller traffic and cluster DNS until the deployment workflow
+adds separate, port-scoped PostgreSQL, Redis and HTTPS egress ranges. Replace
+the image placeholder with a reviewed digest and supply `warden-runtime` from
+an external secret controller. If a selected cloud workload-identity provider
+requires a projected service-account token, enable it narrowly for that service
+account and add only the provider-specific annotations and audience.
 
 For the concrete `warden.vouchins.com` TLS ingress and manually approved,
 immutable-digest rollout workflow, follow

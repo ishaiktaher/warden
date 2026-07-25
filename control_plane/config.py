@@ -55,6 +55,10 @@ class Settings:
     approval_smtp_from: str | None = None
     approval_smtp_username: str | None = None
     approval_smtp_password: str | None = None
+    portal_admin_groups: tuple[str, ...] = ("warden-admin",)
+    portal_approver_groups: tuple[str, ...] = ("warden-approver",)
+    portal_auditor_groups: tuple[str, ...] = ("warden-auditor",)
+    portal_runtime_groups: tuple[str, ...] = ("warden-runtime",)
 
     @property
     def production(self) -> bool:
@@ -85,6 +89,19 @@ def load_settings() -> Settings:
         for origin in os.getenv("WARDEN_ALLOWED_ORIGINS", "").split(",")
         if origin.strip()
     )
+    portal_groups = {
+        name: tuple(
+            group.strip()
+            for group in os.getenv(name, default).split(",")
+            if group.strip()
+        )
+        for name, default in (
+            ("WARDEN_PORTAL_ADMIN_GROUPS", "warden-admin"),
+            ("WARDEN_PORTAL_APPROVER_GROUPS", "warden-approver"),
+            ("WARDEN_PORTAL_AUDITOR_GROUPS", "warden-auditor"),
+            ("WARDEN_PORTAL_RUNTIME_GROUPS", "warden-runtime"),
+        )
+    }
     if environment == "prod" and any(
         origin == "*" or not origin.startswith("https://") for origin in origins
     ):
@@ -190,4 +207,8 @@ def load_settings() -> Settings:
         or None,
         approval_smtp_password=os.getenv("WARDEN_APPROVAL_SMTP_PASSWORD", "").strip()
         or None,
+        portal_admin_groups=portal_groups["WARDEN_PORTAL_ADMIN_GROUPS"],
+        portal_approver_groups=portal_groups["WARDEN_PORTAL_APPROVER_GROUPS"],
+        portal_auditor_groups=portal_groups["WARDEN_PORTAL_AUDITOR_GROUPS"],
+        portal_runtime_groups=portal_groups["WARDEN_PORTAL_RUNTIME_GROUPS"],
     )
