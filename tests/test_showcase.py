@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from html.parser import HTMLParser
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -29,7 +30,7 @@ class ShowcaseTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def test_public_pages_and_health_are_available(self) -> None:
-        for path in ("/", "/console", "/documentation", "/openapi.html", "/showcase.js", "/proof"):
+        for path in ("/", "/design-partner", "/design-partner.js", "/console", "/documentation", "/openapi.html", "/showcase.js", "/proof"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200, path)
             self.assertEqual(response.headers["x-frame-options"], "DENY")
@@ -45,6 +46,8 @@ class ShowcaseTests(unittest.TestCase):
             homepage.headers["content-security-policy"],
         )
         self.assertIn("script-src 'self'", homepage.headers["content-security-policy"])
+        self.assertIn('href="/design-partner">Become a design partner', homepage.text)
+        self.assertNotIn('href="https://www.vouchins.com/contact">Early Access', homepage.text)
 
         script = self.client.get("/showcase.js")
         self.assertIn("Prompt injection attempts an unauthorized", script.text)
@@ -57,6 +60,111 @@ class ShowcaseTests(unittest.TestCase):
         self.assertGreaterEqual(proof["test_cases"], 60)
         self.assertEqual(7, proof["contract_tested_integrations"])
         self.assertEqual(0, proof["live_verified_integrations"])
+
+    @patch("control_plane.showcase._send_design_partner_email")
+    def test_design_partner_application_is_emailed(self, send_email) -> None:
+        submission = {
+            "name": "Avery Morgan",
+            "email": "avery@example.com",
+            "company": "Example Labs",
+            "role": "VP Engineering",
+            "company_size": "51–200",
+            "timeline": "Within 3 months",
+            "use_case": "We need bounded authorization for production support agents.",
+            "website": "",
+        }
+        response = self.client.post("/api/design-partner", json=submission)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual("no-store", response.headers["cache-control"])
+        send_email.assert_called_once()
+        self.assertEqual("avery@example.com", send_email.call_args.args[0].email)
+
+    def test_design_partner_application_validates_input(self) -> None:
+        response = self.client.post(
+            "/api/design-partner",
+            json={"name": "A", "email": "not-an-email", "website": "spam"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    @patch("control_plane.showcase._send_design_partner_email")
+    def test_short_use_case_is_accepted(self, send_email) -> None:
+        response = self.client.post(
+            "/api/design-partner",
+            json={
+                "name": "Avery Morgan",
+                "email": "avery@example.com",
+                "company": "Example Labs",
+                "role": "Founder",
+                "company_size": "1–10",
+                "timeline": "Exploring",
+                "use_case": "Agents",
+                "website": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        send_email.assert_called_once()
+
+    @patch.dict(
+        "os.environ",
+        {
+            "WARDEN_SHOWCASE_EMAIL_PROVIDER": "ses",
+            "WARDEN_SHOWCASE_EMAIL_FROM": "verified@example.com",
+            "WARDEN_SHOWCASE_SES_REGION": "ap-south-1",
+        },
+        clear=False,
+    )
+    @patch("boto3.client")
+    def test_ses_api_delivery(self, boto_client) -> None:
+        from control_plane.showcase import DesignPartnerSubmission, _send_design_partner_email
+
+        ses = MagicMock()
+        boto_client.return_value = ses
+        submission = DesignPartnerSubmission(
+            name="Avery Morgan",
+            email="avery@example.com",
+            company="Example Labs",
+            role="Founder",
+            company_size="1–10",
+            timeline="Exploring",
+            use_case="Production agents",
+        )
+        _send_design_partner_email(submission)
+        boto_client.assert_called_once_with("ses", region_name="ap-south-1")
+        sent = ses.send_raw_email.call_args.kwargs
+        self.assertEqual(sent["Source"], "verified@example.com")
+        self.assertEqual(sent["Destinations"], ["connect@vouchins.com"])
+
+    @patch.dict(
+        "os.environ",
+        {
+            "SES_SMTP_HOST": "email-smtp.us-east-1.amazonaws.com",
+            "SES_SMTP_USER": "ses-user",
+            "SES_SMTP_PASS": "ses-password",
+            "SES_FROM_EMAIL": "connect@vouchins.com",
+        },
+        clear=True,
+    )
+    @patch("control_plane.showcase.smtplib.SMTP")
+    def test_existing_ses_smtp_environment_is_supported(self, smtp_class) -> None:
+        from control_plane.showcase import DesignPartnerSubmission, _send_design_partner_email
+
+        smtp = smtp_class.return_value.__enter__.return_value
+        submission = DesignPartnerSubmission(
+            name="Avery Morgan",
+            email="avery@example.com",
+            company="Example Labs",
+            role="Founder",
+            company_size="1–10",
+            timeline="Exploring",
+            use_case="Production agents",
+        )
+        _send_design_partner_email(submission)
+        smtp_class.assert_called_once_with(
+            "email-smtp.us-east-1.amazonaws.com", 587, timeout=10
+        )
+        smtp.starttls.assert_called_once()
+        smtp.login.assert_called_once_with("ses-user", "ses-password")
+        smtp.send_message.assert_called_once()
 
     def test_documentation_has_no_empty_or_broken_internal_links(self) -> None:
         response = self.client.get("/documentation")

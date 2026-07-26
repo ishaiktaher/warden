@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Apply to become a Warden design partner.">
+  <link rel="icon" href="https://www.vouchins.com/favicon.png">
+  <title>Become a Warden Design Partner | Vouchins</title>
+  <style>
+    :root{--bg:#020617;--panel:#070b18;--line:rgba(255,255,255,.12);--text:#fff;--muted:#9ca3af;--brand:#4fd1c5;--navy:#0a1b5c;--danger:#fda4af}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body:before{content:"";position:fixed;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:64px 64px;mask-image:linear-gradient(to bottom,#000,transparent 75%);z-index:-1}.shell{width:min(1040px,calc(100% - 36px));margin:auto}.nav{margin-top:14px;height:58px;padding:0 22px;display:flex;align-items:center;justify-content:space-between;border-radius:16px;background:#fff}.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--navy);font-weight:800}.brand img{width:112px}.divider{width:1px;height:24px;background:#d6d9e2}.back{color:#596174;text-decoration:none;font-weight:650}.layout{display:grid;grid-template-columns:.85fr 1.15fr;gap:72px;padding:76px 0 90px;align-items:start}.kicker{color:var(--brand);font:600 11px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase}.intro h1{font-size:clamp(42px,6vw,64px);line-height:1.04;letter-spacing:-.05em;margin:18px 0}.intro p{font-size:17px;color:var(--muted);max-width:440px}.points{margin:32px 0 0;padding:0;list-style:none;display:grid;gap:14px;color:#cbd5e1}.points li:before{content:"✓";color:var(--brand);margin-right:10px}.card{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,rgba(11,19,43,.96),rgba(4,8,22,.98));padding:30px;box-shadow:0 28px 90px rgba(0,0,0,.3)}form{display:grid;gap:18px}.row{display:grid;grid-template-columns:1fr 1fr;gap:16px}label{display:grid;gap:7px;color:#dbe1ea;font-size:12px;font-weight:650}input,select,textarea{width:100%;border:1px solid rgba(255,255,255,.14);border-radius:9px;background:#060b19;color:#fff;padding:12px 13px;font:inherit}textarea{min-height:145px;resize:vertical}input:focus,select:focus,textarea:focus{outline:2px solid var(--brand);outline-offset:2px;border-color:transparent}.hidden{position:absolute;left:-9999px}.submit{min-height:46px;border:0;border-radius:9px;background:var(--brand);color:#061321;font-weight:800;cursor:pointer}.submit:hover{background:#5eead4}.submit:disabled{opacity:.65;cursor:wait}.privacy{margin:0;color:#717b8d;font-size:11px}.status{min-height:22px;margin:0;color:var(--brand)}.status.error{color:var(--danger)}@media(max-width:780px){.layout{grid-template-columns:1fr;gap:38px;padding:52px 0}.row{grid-template-columns:1fr}.card{padding:22px}.brand img{width:94px}}
+  </style>
+</head>
+<body>
+  <header class="shell"><nav class="nav"><a class="brand" href="/"><img src="https://www.vouchins.com/images/logo.png" width="112" height="23" alt="Vouchins"><span class="divider"></span><span>Warden</span></a><a class="back" href="/">← Back to Warden</a></nav></header>
+  <main class="shell layout">
+    <section class="intro"><div class="kicker">Design partner program</div><h1>Help shape how AI agents earn trust.</h1><p>Work directly with the Warden team to design secure agent authorization around a real production use case.</p><ul class="points"><li>Influence the product roadmap</li><li>Get hands-on architecture support</li><li>Move from pilot to production safely</li></ul></section>
+    <section class="card" aria-labelledby="form-title"><h2 id="form-title">Tell us about your team</h2>
+      <form id="design-partner-form">
+        <div class="row"><label>Full name<input name="name" autocomplete="name" required minlength="2" maxlength="100"></label><label>Work email<input name="email" type="email" autocomplete="email" required maxlength="254"></label></div>
+        <div class="row"><label>Company<input name="company" autocomplete="organization" required minlength="2" maxlength="120"></label><label>Your role<input name="role" autocomplete="organization-title" required minlength="2" maxlength="100"></label></div>
+        <div class="row"><label>Company size<select name="company_size" required><option value="">Select one</option><option>1–10</option><option>11–50</option><option>51–200</option><option>201–1,000</option><option>1,001+</option></select></label><label>Target timeline<select name="timeline" required><option value="">Select one</option><option>Actively building</option><option>Within 3 months</option><option>3–6 months</option><option>6+ months</option><option>Exploring</option></select></label></div>
+        <label>What are you building, and where could Warden help?<textarea name="use_case" required maxlength="3000" placeholder="Tell us about your agents, the tools they access, and your security or governance needs."></textarea></label>
+        <label class="hidden" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>
+        <button class="submit" type="submit">Submit application</button>
+        <p class="privacy">We’ll use this information only to evaluate and respond to your application.</p>
+        <p class="status" id="form-status" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+  <script src="/design-partner.js" defer></script>
+</body>
+</html>
