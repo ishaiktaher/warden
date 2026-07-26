@@ -29,7 +29,7 @@ class ShowcaseTests(unittest.TestCase):
         self.client = TestClient(app)
 
     def test_public_pages_and_health_are_available(self) -> None:
-        for path in ("/", "/console", "/documentation", "/openapi.html", "/showcase.js", "/proof"):
+        for path in ("/", "/console", "/documentation", "/openapi.html", "/showcase.js", "/product.css", "/proof"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200, path)
             self.assertEqual(response.headers["x-frame-options"], "DENY")
@@ -37,18 +37,20 @@ class ShowcaseTests(unittest.TestCase):
 
         homepage = self.client.get("/")
         self.assertIn("https://www.vouchins.com/images/logo.png", homepage.text)
-        self.assertIn('data-scenario="legitimate"', homepage.text)
-        self.assertIn('data-scenario="malicious"', homepage.text)
-        self.assertIn('<script src="/showcase.js" defer></script>', homepage.text)
+        self.assertIn("Every agent.", homepage.text)
+        self.assertIn("Accountable.", homepage.text)
+        self.assertIn('href="https://www.vouchins.com"', homepage.text)
+        self.assertIn('href="https://warden.vouchins.com"', homepage.text)
+        self.assertIn('href="/product.css"', homepage.text)
         self.assertIn(
             "img-src 'self' data: https://www.vouchins.com",
             homepage.headers["content-security-policy"],
         )
         self.assertIn("script-src 'self'", homepage.headers["content-security-policy"])
 
-        script = self.client.get("/showcase.js")
-        self.assertIn("Prompt injection attempts an unauthorized", script.text)
-        self.assertIn("Credential never resolved", script.text)
+        styles = self.client.get("/product.css")
+        self.assertIn("--navy:#0a1b5c", styles.text)
+        self.assertIn(".decision-card", styles.text)
 
         health = self.client.get("/health")
         self.assertEqual(health.status_code, 200)

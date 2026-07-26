@@ -57,6 +57,11 @@ def showcase_script() -> FileResponse:
     return FileResponse(ROOT / "ui" / "showcase.js", media_type="text/javascript")
 
 
+@app.get("/product.css", include_in_schema=False)
+def product_styles() -> FileResponse:
+    return FileResponse(ROOT / "ui" / "product.css", media_type="text/css")
+
+
 @app.get("/proof")
 def proof() -> dict:
     return json.loads((ROOT / "ui" / "proof.json").read_text(encoding="utf-8"))
