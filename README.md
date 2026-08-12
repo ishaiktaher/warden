@@ -193,4 +193,4 @@ HTTPS contract, or an operator-owned native provider plugin.
 The checked-in AWS Terraform is one optional reference deployment, not a core
 dependency. See [provider contracts](docs/PROVIDERS.md),
 [production deployment](docs/PRODUCTION.md), and the
-[optional AWS module](deploy/terraform/README.md).
+[optional AWS module](deploy/terraform/README.md)..
