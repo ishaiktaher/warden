@@ -1,2 +1,2 @@
 -r ../../requirements.in
-python-pkcs11==0.9.5
+python-pkcs11==0.10.0
